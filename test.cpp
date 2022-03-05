@@ -1,73 +1,64 @@
 #include <iostream>
-#include "MDL_MODULE/mdl_enter.h"
-#include "base/BaseDS.hpp"
-#include "base/BaseAttr.hpp"
+#include <thread>
+#include <atomic>
+#include "mdl_module/mdl_enter.h"
 
 using namespace std;
 
 int main() {
-    string dir = "../data/tt/";
-    vector<string> files = {
-//            "20180324 德国公开赛 女单第二轮 孙颖莎vs伊藤美诚-data.json",
-//            "20180526 中国香港公开赛 女单半决赛 王曼昱vs伊藤美诚-data.json",
-//            "20180602 中国公开赛 女单半决赛 王曼昱vs伊藤美诚-data.json",
-//            "20180610 日本公开赛 女单决赛 王曼昱vs伊藤美诚-data.json",
-//            "20191005 瑞典公开赛 女单四分之一决赛 王曼昱vs伊藤美诚-data.json",
-//            "20191006 瑞典公开赛 女单决赛 陈梦vs伊藤美诚-data.json",
-//            "20191006 瑞典公开赛 女单半决赛 孙颖莎vs伊藤美诚-data.json",
-//            "20191013 德国公开赛 女单决赛 孙颖莎vs伊藤美诚-data.json",
-//            "fliter_pingpong.json"
-            "20210729 东京奥运会 女单半决赛 孙颖莎vs伊藤美诚-collect_project.json",
-            "20191013 德国公开赛 女单决赛 孙颖莎vs伊藤美诚-collect_project.json",
-            "20191006 瑞典公开赛 女单半决赛 孙颖莎vs伊藤美诚-collect_project.json",
-            "20190424 布达佩斯世乒赛 女单十六分之一决赛 孙颖莎vs伊藤美诚-collect_project.json",
-            "20180324 德国公开赛 女单第二轮 孙颖莎vs伊藤美诚-collect_project.json",
-    };
-    BaseDS::load_file(files, FileType::TableTennis, dir);
-    BaseAttr::print_values("values.dat");
+    char *input_dir = "../data/tt",
+            *output_filename = "../iiii.dat",
+            *processed_sequences_filename = "../out_sequences.json",
+            *target_player = "孙颖莎";
+    vector<string> files = {"20180324 德国公开赛 女单第二轮 孙颖莎vs伊藤美诚-data.json",
+                            "20190424 布达佩斯世乒赛 女单十六分之一决赛 孙颖莎vs伊藤美诚-data.json"};
+    vector<string> attribute_names = {"BallPosition",
+                                      "StrikePosition",
+                                      "StrikeTech"};
+    auto file_type = FileType::TableTennis;
+    nlohmann::json sequences;
+    BaseDS::sequenceList = {};
+    BaseDS::load_file(files, file_type, target_player, sequences, attribute_names, input_dir);
+    BaseDS::convert_data(output_filename, sequences);
 
-//    string dir = "../data/";
-//    vector<string> files = {
-//            "badminton.json"
-//    };
-//    BaseDS::load_file(files, FileType::Badminton, dir);
-//    BaseAttr::print_values("values.dat");
-
-//    string dir = "../data/";
-//    vector<string> files = {
-//            "tennis.json"
-//    };
-//    BaseDS::load_file(files, FileType::Tennis, dir);
-//    BaseAttr::print_values("values.dat");
-////
-    char filename[] = "temp.dat";
-    BaseDS::convert_data(filename);
-
-    char interfilename[] = "intertemp.dat";
+    ofstream processed_sequences_stream;
+    processed_sequences_stream.open(processed_sequences_filename);
+    processed_sequences_stream << sequences.dump();
+    processed_sequences_stream.close();
 
 
-    char *tennis_argv[] = {
-                "",
-                "-i",
-                filename,
-                "-w",
-                "true",
-                "-o",
-                interfilename,
-                "-m",
-                "10",
-    };
-    int tennis_argc = sizeof(tennis_argv) / sizeof(char *);
-    start_mdl(tennis_argc, tennis_argv);
+    MDLParameters arg;
+    arg.FP_windows = false;
+    arg.fill_patterns = false;
+    arg.input_filename = output_filename;
+    arg.dummy_filename = "";
+    arg.output_dir = "..";
+    arg.minsup = 10;
+    arg.pattern_window_index_min = 0;
+    arg.pattern_window_index_max = -1;
+    arg.pattern_length_min = 0;
+    arg.pattern_length_max = 1000;
+    arg.pattern_file = "out_patterns.json";
+    string old_pattern_filename = "../out_patterns.json";
+    string insert_patterns_filename = "../insert_tactics.json";
+    string attr_use_str = "1 1 1";
+    string delete_patterns_id_str = "";
+    vector<int> attr_use;
+    stringstream ss(attr_use_str);
+    string use;
+    while (ss >> use) {
+        attr_use.push_back(stoi(use));
+    }
+    arg.attr_use = attr_use;
 
-//    char *quantitative_argv[] = {
-//            "",
-//            "-i",
-//            "./quantitative_base.dat",
-//            "-w",
-//            "true"
-//    };
-//    int quantitative_argc = sizeof(quantitative_argv) / sizeof(char *);
-//    start_mdl(quantitative_argc, quantitative_argv);
-
+    vector<int> delete_patterns_id;
+    stringstream ss_p(delete_patterns_id_str);
+    string pattern_id;
+    while (ss_p >> pattern_id) {
+        delete_patterns_id.push_back(stoi(pattern_id));
+    }
+    string old_pattern_filename_str = old_pattern_filename;
+//    mdl_modify_and_run(old_pattern_filename_str, delete_patterns_id, insert_patterns_filename, arg);
+    mdl_run(arg, insert_patterns_filename);
+    return 0;
 }

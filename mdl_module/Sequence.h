@@ -7,9 +7,6 @@
 #include "Pattern.h"
 
 //#define LSH
-#ifdef LSH
-#include "PatternTable.h"
-#endif
 
 using namespace std;
 
@@ -48,7 +45,7 @@ public:
 
     string print_sequence(bool all_values);
 
-    const list<Event *> *find_occurrences(event_set *events) const;
+    const list<Event *> *find_occurrences(attribute_set *events) const;
 
     int load_dummies();
 
@@ -62,11 +59,7 @@ public:
 
     bool cover(Pattern *p, Window *w); //pos = id of event in the sequence
     bool cover(Attribute *e, int pos, Pattern *p);
-#ifdef MISS
-    int try_cover(event_set *events, int pos); // number of miss events number
-#else
-    bool try_cover(event_set *events, int pos); //true = cover is possible
-#endif
+    bool try_cover(attribute_set *events, int pos); //true = cover is possible
     bool try_cover(Attribute *e, int pos);
     bool try_overlap(int pos);
 
@@ -74,10 +67,6 @@ public:
 
     bool debug_flag;//DEBUG
     bool error_flag;
-#ifdef LSH
-    set<Pattern*> *cover_pattern; // cover_pattern[i] includes the patterns emerge in sequence i
-    const int cut_size = 50; // a sequence's length is no longer than cut_size
-#endif
     Event **mev_time;                        //a multi-event array, one event pointer per time step
     int nr_events;                                    //total number of events
 

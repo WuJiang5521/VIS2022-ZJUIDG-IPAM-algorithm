@@ -4,8 +4,8 @@
 using namespace std;
 
 
-Event::Event(int alphabetSize, int id, int seqid) : alphabetSize(alphabetSize), id(id), seqid(seqid) {
-    events = new event_set;
+Event::Event(int alphabetSize, int id, int seqid, int seqindex) : alphabetSize(alphabetSize), id(id), seqid(seqid), seqindex(seqindex) {
+    events = new attribute_set;
     nxt = nullptr;
     size = 0;
 }

@@ -13,9 +13,10 @@ class Sequence;
 class Pattern {
 
 public:
-    Pattern(int l, event_set **event_sets, Sequence *s);
+    Pattern(int l, attribute_set **event_sets, Sequence *s);
+    Pattern(int l, attribute_set **event_sets, Sequence *s, int id);
 
-    Pattern(int l, event_set **event_sets, Sequence *s, Pattern *x, Pattern *y);
+    Pattern(int l, attribute_set **event_sets, Sequence *s, Pattern *x, Pattern *y);
 
     ~Pattern();
 
@@ -26,6 +27,8 @@ public:
     string print(bool console_output) const;
 
     string print_fp_windows() const;
+
+    int get_id() const {return id;}
 
     int get_aid_rank() const { return AID_rank; }
 
@@ -52,9 +55,6 @@ public:
 
     int get_usage_fill() const { return usage_fill; }
 
-#ifdef MISS
-    int get_usage_miss() const { return usage_miss; }
-#endif
 
     double get_codelength() const { return codelength; }
 
@@ -62,9 +62,6 @@ public:
 
     double get_codelength_fill() const { return codelength_fill; }
 
-#ifdef MISS
-    double get_codelength_miss() const { return codelength_miss; }
-#endif
 
     double get_estimated_gain() const { return estimatedGain; }
 
@@ -80,25 +77,18 @@ public:
 
     int get_size() const { return size; }
 
-    event_set *get_symbols(int timestep) const { return event_sets[timestep]; }
+    attribute_set *get_symbols(int timestep) const { return event_sets[timestep]; }
+    attribute_set **get_events() const { return event_sets; }
 
     bool overlap(Window *w, Window *nxt) const;
 
-    bool overlap(event_set *events_a, event_set *events_b) const;
-#ifdef MISS
-    void update_usages(int usg_gap, int usg_miss) {
-        usage++;
-        usage_gap += usg_gap;
-        usage_fill += length - 1;
-        usage_miss += usg_miss;
-    }
-#else
-    void update_usages(int usg_gap) {
-        usage++;
+    bool overlap(attribute_set *events_a, attribute_set *events_b) const;
+
+    void update_usages(int usg_gap, int use = 1) {
+        usage += use;
         usage_gap += usg_gap;
         usage_fill += length - 1;
     }
-#endif
 
     double compute_estimated_gain(int usg_x, int usg_y, int usg_z, int usg_s) const;
 
@@ -114,16 +104,14 @@ public:
     void set_min_windows(Sequence *s) { min_windows = build_min_windows(s); }
 
     void reset_usage();
-#ifdef MISS
-    void update_codelength(double sum, double miss_sum, MathUtil* mu, int nr_of_attributes);
-#else
+
     void update_codelength(double sum); //sum = sum of all usages + laplace
-#endif
     void rollback();
 
-
+    static int id_top;
 private:
     list<Window *> *build_min_windows(Sequence *s);
+    int id;
 
     Sequence *g_seq;
     set<int> total_AIDs;        //over all time steps the set of attributes contained in this pattern
@@ -131,22 +119,15 @@ private:
     int size;                //total nr of events in the pattern
     int AID_rank;            //rank based on the attributes it specifies values for, i.e. for every attribute we have a 1-bit when the pattern has a value for it, and a 0-bit otherwise
     double szST;            //size of the pattern encoded with base code lengths
-#ifdef MISS
-    double codelength, codelength_gap, codelength_fill, codelength_miss;
-#else
+
     double codelength, codelength_gap, codelength_fill;        //given a covering: the codeLength of the pattern, a gap in this pattern, and a fill in this pattern
-#endif
     double estimatedGain;    //expected gain in L(CT,D) when adding this pattern to the code table
-#ifdef MISS
-    int usage, usage_gap, usage_fill, usage_miss;
-#else
     int usage, usage_gap, usage_fill;
-#endif
     int support;            //max nr of disjoint minimal windows
 
     string g_info;            //breakdown info for generated patterns
 
-    event_set **event_sets;        //a pointer to a set of events for each timestep
+    attribute_set **event_sets;        //a pointer to a set of events for each timestep
 
     list<Window *> *min_windows;        //a list of all minimal windows for this pattern
     list<Window *> *alt_min_windows;    //alternative list of all minimal windows for this pattern in another sequence
@@ -154,13 +135,8 @@ private:
     Pattern *g_x, *g_y;            //the two patterns from which this pattern is build. NOTE: x < y
 
     //for rollback
-#ifdef MISS
-    double r_codelength, r_codelength_gap, r_codelength_fill, r_codelength_miss;
-    int r_usage, r_usage_gap, r_usage_fill, r_usage_miss;
-#else
     double r_codelength, r_codelength_gap, r_codelength_fill;
     int r_usage, r_usage_gap, r_usage_fill;
-#endif
     bool usage_decreased;
 
 };
@@ -197,7 +173,7 @@ inline bool operator<(const Pattern &lhs, const Pattern &rhs) {
         if (ts > rhs.get_length() - 1)
             return false;
 
-        event_set *avts = lhs.get_symbols(ts), *bvts = rhs.get_symbols(ts);
+        attribute_set *avts = lhs.get_symbols(ts), *bvts = rhs.get_symbols(ts);
         auto ita = avts->begin(), enda = avts->end(), itb = bvts->begin(), endb = bvts->end();
         while (ita != enda && itb != endb) {
             Attribute *eva = (*ita);
@@ -477,20 +453,33 @@ struct Parameters {
     ///////////////////////////////////////////////////
     ///				For debug output				///
     ///////////////////////////////////////////////////
-    bool debug, debug2,            //print debug info
+    bool debug,                 //print debug info
     prune_check;                //reports when a pattern is pruned that was not part of the recently added pattern
 
     int cnt_mat_pat, cnt_acc, cnt_rej, cnt_acc_var, cnt_rej_var, cnt_infreq_materialized, cnt_infreq, cnt_covers; //DEBUG 22-10
 
     string output_filename,
             input_filename,
-            dummy_file;
+            dummy_file,
+            output_dir;
+
+
+    string pattern_in_sequences_file;
+    string pattern_pos_in_sequences_file;
+    string sequences_file;
+    string winner_file;
+    string pattern_file;
+    string pattern_id_file;
 
 
     time_t start, eind;
 
     Dummy **dummies;                //a list of the inserted Dummy-patterns
 
+    int pattern_window_index_min, pattern_window_index_max;
+    int pattern_length_min, pattern_length_max;
+
+    vector<int> attr_use;
 };
 
 

@@ -3,43 +3,63 @@
 //
 
 #include <iostream>
-#include "FileLoader.hpp"
-#include "BaseAttr.hpp"
+#include "FileLoader.h"
+#include "BaseAttr.h"
 #include "json.hpp"
 #include <exception>
 #define FLITER_SERVER
 using namespace std;
 using json = nlohmann::json;
 
-list<BaseSeq> extract_tt_sequences(json j) {
-    string our_player = "00", opponent = "10";
+list<BaseSeq> extract_tt_sequences(json j, const string & target_player, const vector<string> &attribute_names, json &sequences) {
+    string our_player;
+    int t_num = 0, p_num = 0;
+    for (auto t : j["player"]) {
+        for (auto p : t) {
+            if (p["name"] == target_player) {
+                our_player += (char)(t_num + '0');
+                our_player += (char)(p_num + '0');
+                break;
+            }
+            p_num++;
+        }
+        if (!our_player.empty()) break;
+        t_num++;
+    }
     try {
         list<BaseSeq> sequenceList = list<BaseSeq>();
 
-        for (auto game: j["data"]["record"]["list"]) {
+        for (auto game: j["record"]["list"]) {
             for (auto rally: game["list"]) {
                 auto events = vector<BaseEvt>();
 #ifdef FLITER_SERVER
                 if (rally["list"].size() < 3) {
                     continue;
                 }
-                if (rally["list"][0]["HitPlayer"] == "10") {
+                if (rally["list"][0]["HitPlayer"] != our_player) {
                     continue;
                 }
 #endif
+                json sequence;
+                sequence["server"] = (int)(rally["list"][0]["HitPlayer"] != our_player);
+                sequence["winner"] = (int)(rally["winSide"] != t_num);
+                sequences.push_back(sequence);
                 for (auto strike: rally["list"]) {
                     auto attrs = vector<int>();
 
                     if (strike["HitPlayer"] == our_player) {
-                        attrs.push_back(BaseAttr::from_key_value("ttBallPosition", strike["BallPosition"]["value"]));
-                        attrs.push_back(BaseAttr::from_key_value("ttStrikePosition", strike["StrikePosition"]["value"]));
-                        attrs.push_back(BaseAttr::from_key_value("ttStrikeTech", strike["StrikeTech"]["value"]));
-//                    attrs.push_back(BaseAttr::from_key_value("ttSpinKind", strike["SpinKind"]));
+                        for (const auto & attribute_name : attribute_names) {
+                            attrs.push_back(BaseAttr::from_key_value(attribute_name, strike[attribute_name]));
+                        }
                     } else {
-
-                        attrs.push_back(BaseAttr::from_key_value("ttBallPosition", to_string(strike["BallPosition"]["value"]) + "Op"));
-                        attrs.push_back(BaseAttr::from_key_value("ttStrikePosition", to_string(strike["StrikePosition"]["value"]) + "Op"));
-                        attrs.push_back(BaseAttr::from_key_value("ttStrikeTech", to_string(strike["StrikeTech"]["value"]) + "Op"));
+                        auto remove_quote = [](string s) {
+                            s.erase(remove_if(s.begin(), s.end(), [](unsigned char x) {return x == '"';}), s.end());
+                            return s;
+                        };
+                        for (const auto & attribute_name : attribute_names) {
+                            string attribute_name_op = remove_quote(to_string(strike[attribute_name])) + "Op";
+                            attrs.push_back(BaseAttr::from_key_value(attribute_name, attribute_name_op));
+                        }
                     }
 
                     events.emplace_back(attrs);
@@ -70,37 +90,42 @@ string ball_position_int(double x) {
     }
 }
 
-list<BaseSeq> extract_badminton_sequences(json j) {
-    string our_player = "Momota Kento", opponent = "Opponent";
+list<BaseSeq> extract_badminton_sequences(json j, const string & target_player, const vector<string> &attribute_names, json &sequences) {
+    string our_player = target_player;
     try {
         list<BaseSeq> sequenceList = list<BaseSeq>();
-        int debug_cnt = 0;
         for (auto rally: j["dataset"]) {
             auto events = vector<BaseEvt>();
 #ifdef FLITER_SERVER
             if (rally["patterns"].size() < 7) {
                 continue;
             }
-            if (rally["server"] != "Momota Kento") {
+            if (rally["server"] != our_player) {
                 continue;
             }
-            if (++debug_cnt > 338) {
-                break;
-            }
 #endif
+            json sequence;
+            sequence["server"] = (int)(rally["server"] != our_player);
+            sequence["winner"] = (int)(rally["winner"] != our_player);
+            sequences.push_back(sequence);
             for (auto strike: rally["patterns"]) {
                 auto attrs = vector<int>();
                 if (strike["HitPlayer"] == our_player) {
-                    attrs.push_back(BaseAttr::from_key_value("btBallPosition", ball_position_int(strike["BallPosition"])));
-                    attrs.push_back(BaseAttr::from_key_value("btStrikePosition", strike["StrikePosition"]));
-                    attrs.push_back(BaseAttr::from_key_value("btStrikeTech", strike["StrikeTech"]));
+                    attrs.push_back(BaseAttr::from_key_value("BallPosition", ball_position_int(strike["BallPosition"])));
+                    attrs.push_back(BaseAttr::from_key_value("StrikePosition", strike["StrikePosition"]));
+                    attrs.push_back(BaseAttr::from_key_value("StrikeTech", strike["StrikeTech"]));
                 } else {
-                    attrs.push_back(BaseAttr::from_key_value("btBallPosition", ball_position_int(strike["BallPosition"]) + "Op"));
-                    attrs.push_back(BaseAttr::from_key_value("btStrikePosition", to_string(strike["StrikePosition"]) + "Op"));
-                    attrs.push_back(BaseAttr::from_key_value("btStrikeTech", to_string(strike["StrikeTech"]) + "Op"));
+                    auto remove_quote = [](string s) {
+                        s.erase(remove_if(s.begin(), s.end(), [](unsigned char x) {return x == '"';}), s.end());
+                        return s;
+                    };
+                    string BallPosition = remove_quote(to_string(strike["BallPosition"]));
+                    string StrikePosition = remove_quote(to_string(strike["StrikePosition"]));
+                    string StrikeTech = remove_quote(to_string(strike["StrikeTech"]));
+                    attrs.push_back(BaseAttr::from_key_value("BallPosition", ball_position_int(strike["BallPosition"]) + "Op"));
+                    attrs.push_back(BaseAttr::from_key_value("StrikePosition", StrikePosition + "Op"));
+                    attrs.push_back(BaseAttr::from_key_value("StrikeTech", StrikeTech + "Op"));
                 }
-//                attrs.push_back(BaseAttr::from_key_value("btHitPlayer", strike["HitPlayer"] == our_player ? our_player : opponent));
-//                    attrs.push_back(BaseAttr::from_key_value("ttSpinKind", strike["SpinKind"]));
 
                 events.emplace_back(attrs);
             }
@@ -113,8 +138,8 @@ list<BaseSeq> extract_badminton_sequences(json j) {
     }
 }
 
-list<BaseSeq> extract_tennis_sequences(json j) {
-    string our_player = "Djokovic", opponent = "Opponent";
+list<BaseSeq> extract_tennis_sequences(json j, const string & target_player, const vector<string> &attribute_names, json &sequences) {
+    string our_player = target_player;
     try {
         list<BaseSeq> sequenceList = list<BaseSeq>();
 
@@ -128,24 +153,28 @@ list<BaseSeq> extract_tennis_sequences(json j) {
                 continue;
             }
 #endif
+            json sequence;
+            sequence["server"] = (int)(rally["server"] != our_player);
+            sequence["winner"] = (int)(rally["winner"] != our_player);
+            sequences.push_back(sequence);
             for (auto strike: rally["patterns"]) {
                 auto attrs = vector<int>();
                 if (strike["HitPlayer"] == our_player) {
-                    attrs.push_back(BaseAttr::from_key_value("btBallPosition", strike["BallPosition"]));
-                    attrs.push_back(BaseAttr::from_key_value("btStrikePosition", strike["StrikePosition"]));
-                    attrs.push_back(BaseAttr::from_key_value("btStrikeTech", strike["StrikeTech"]));
-//                    attrs.push_back(BaseAttr::from_key_value("btSpinKind", strike["SpinKind"]));
-//                    attrs.push_back(BaseAttr::from_key_value("btGameAction", strike["GameAction"]));
+                    attrs.push_back(BaseAttr::from_key_value("BallPosition", strike["BallPosition"]));
+                    attrs.push_back(BaseAttr::from_key_value("StrikePosition", strike["StrikePosition"]));
+                    attrs.push_back(BaseAttr::from_key_value("StrikeTech", strike["StrikeTech"]));
                 } else {
-                    attrs.push_back(BaseAttr::from_key_value("btBallPosition", to_string(strike["BallPosition"]) + "Op"));
-                    attrs.push_back(BaseAttr::from_key_value("btStrikePosition", to_string(strike["StrikePosition"]) + "Op"));
-                    attrs.push_back(BaseAttr::from_key_value("btStrikeTech", to_string(strike["StrikeTech"]) + "Op"));
-//                    attrs.push_back(BaseAttr::from_key_value("btSpinKind", to_string(strike["SpinKind"]) + "Op"));
-//                    attrs.push_back(BaseAttr::from_key_value("btGameAction", to_string(strike["GameAction"]) + "Op"));
-
+                    auto remove_quote = [](string s) {
+                        s.erase(remove_if(s.begin(), s.end(), [](unsigned char x) {return x == '"';}), s.end());
+                        return s;
+                    };
+                    string BallPosition = remove_quote(to_string(strike["BallPosition"]));
+                    string StrikePosition = remove_quote(to_string(strike["StrikePosition"]));
+                    string StrikeTech = remove_quote(to_string(strike["StrikeTech"]));
+                    attrs.push_back(BaseAttr::from_key_value("BallPosition", BallPosition + "Op"));
+                    attrs.push_back(BaseAttr::from_key_value("StrikePosition", StrikePosition + "Op"));
+                    attrs.push_back(BaseAttr::from_key_value("StrikeTech", StrikeTech + "Op"));
                 }
-//                attrs.push_back(BaseAttr::from_key_value("btHitPlayer", strike["HitPlayer"] == our_player ? our_player : opponent));
-//                    attrs.push_back(BaseAttr::from_key_value("ttSpinKind", strike["SpinKind"]));
 
                 events.emplace_back(attrs);
             }
@@ -158,11 +187,15 @@ list<BaseSeq> extract_tennis_sequences(json j) {
     }
 }
 
-list<BaseSeq> FileLoader::loadFile(const string& fileName, FileType fileType) {
+list<BaseSeq> FileLoader::loadFile(const string& fileName,
+                                   FileType fileType,
+                                   const string& target_player,
+                                   const vector<string> &attribute_names,
+                                   json &sequences) {
     try {
         ifstream file(fileName, ios::in);
         if (!file.is_open())
-            throw invalid_argument("Cannot open this file!");
+            throw invalid_argument("Cannot open this file! File: " + fileName);
 
 
         json j;
@@ -170,11 +203,11 @@ list<BaseSeq> FileLoader::loadFile(const string& fileName, FileType fileType) {
 
         switch (fileType) {
             case FileType::TableTennis:
-                return extract_tt_sequences(j);
+                return extract_tt_sequences(j, target_player, attribute_names, sequences);
             case FileType::Badminton:
-                return extract_badminton_sequences(j);
+                return extract_badminton_sequences(j, target_player, attribute_names, sequences);
             case FileType::Tennis:
-                return extract_tennis_sequences(j);
+                return extract_tennis_sequences(j, target_player, attribute_names, sequences);
             default:
                 throw invalid_argument("The file type is not supported!");
         }

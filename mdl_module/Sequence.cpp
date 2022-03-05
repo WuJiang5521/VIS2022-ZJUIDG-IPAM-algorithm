@@ -16,9 +16,6 @@ Sequence::Sequence(FILE *f, Parameters *par) : par(par) {
     } else
         par->nr_of_patterns = 0;
     init();
-#ifdef LSH
-    cover_pattern = nullptr;
-#endif
 }
 
 int Sequence::load_dummies() {
@@ -160,9 +157,6 @@ int Sequence::read(FILE *f) {
     //count sequences and events
     rewind(f);
     cnt = -1;
-#ifdef LSH
-    int cnt_nr_i = 0;
-#endif
     while (fscanf(f, "%d", &a) == 1) {
         if (cnt++ < par->nr_of_attributes)    //skip header line
             continue;
@@ -171,19 +165,9 @@ int Sequence::read(FILE *f) {
             //all attributes have same number of sequences and events, so we only count the events and sequences in the first attribute
             if (a >= 0) {
                 mcnt++;    //new event
-#ifdef LSH
-                ++cnt_nr_i;
-                if (cnt_nr_i == cut_size) {
-                    cnt_nr_i = 0;
-                    ++scnt;
-                }
-#endif
             }
             else {
                 scnt++;       //new sequence
-#ifdef LSH
-                cnt_nr_i = 0;
-#endif
             }
         }
     }
@@ -221,43 +205,31 @@ int Sequence::read(FILE *f) {
     int i = 0;                //event id
     int sid = 0;            //sequence id
     int aid = 0;            //attribute id
-#ifdef LSH
-    int cnt_i = 0;
-#endif
+    int sindex = 0;         //index in sequence
     while (fscanf(f, "%d", &sym) == 1) {
         if (cnt++ < par->nr_of_attributes)    //skip header line
             continue;
         if (sym == -2) {
             aid++;
             i = 0;
-#ifdef LSH
-            cnt_i = 0;
-#endif
             sid = 0;
+            sindex = 0;
             continue;
         }
         if (sym == -1) {
-#ifdef LSH
-            cnt_i = 0;
-#endif
             sid++;
+            sindex = 0;
             continue;
         }
         if (aid == 0) {
-            mev_time[i] = new Event(par->nr_of_attributes, i, sid);
+            mev_time[i] = new Event(par->nr_of_attributes, i, sid, sindex);
             sequence_sizes[sid]++;
         }
         Event *me = mev_time[i];
         occ[aid][sym].push_back(me);
         me->add_event(new Attribute(sym, aid, me->get_size(), tree_ids[aid][sym]));
         i++;
-#ifdef LSH
-        ++cnt_i;
-        if (cnt_i == cut_size) {
-            cnt_i = 0;
-            ++sid;
-        }
-#endif
+        sindex++;
     }
     return 0;
 }
@@ -274,7 +246,7 @@ void Sequence::compute_st_codelengths() {
 }
 
 //Find all events that contain this set of events
-const list<Event *> *Sequence::find_occurrences(event_set *events) const {
+const list<Event *> *Sequence::find_occurrences(attribute_set *events) const {
     auto *occ = new list<Event *>();
     int nr_events = events->size();
 
@@ -309,13 +281,8 @@ const list<Event *> *Sequence::find_occurrences(event_set *events) const {
             if ((*occ_per_event[j])->id != (*occ_per_event[j - 1])->id)    //check if all point at same Event
                 aligned = false;
         }
-#ifdef MISS
-        if (occ->empty() || *occ_per_event[smallest] != occ->back())
-            occ->push_back((*occ_per_event[smallest]));
-#else
         if (aligned)                                                //add new occurence
             occ->push_back((*occ_per_event[0]));
-#endif
 
         occ_per_event[smallest]++;                                    //go to next occurence for the event with the earliest occurence
         if (occ_per_event[smallest] == end_per_event[smallest])            //if there is no next occurence we stop
@@ -329,7 +296,7 @@ const list<Event *> *Sequence::find_occurrences(event_set *events) const {
 bool Sequence::cover(Pattern *p, Window *w) {
     bool result = false;
 
-    event_set *events;
+    attribute_set *events;
     for (int ts = 0; ts < p->get_length(); ++ts) {
         events = p->get_symbols(ts);
         for (auto event : *events) {
@@ -362,32 +329,9 @@ bool Sequence::cover(Attribute *e, int pos, Pattern *p) {
     }
     return (mev_covered == par->nr_events);
 }
-#ifdef MISS
-#define INF 0x7fffffff
-int Sequence::try_cover(event_set *events, int pos) {
-    int miss_cnt = 0;
-    for (auto it: *events) {
-        if (!try_overlap(pos)) {
-            return INF;
-        }
-        if (!try_cover(it, pos)) {
-//            if (miss_print_debug) {
-////                outfile_miss << "sequence: " << mev_time[pos]->seqid << endl;
-//                int seq_id = mev_time[pos]->seqid;
-//                int debug_pos = pos;
-////                while (pos - debug_pos - 1 >= 0 && mev_time[pos - debug_pos - 1]->seqid == seq_id) ++debug_pos;
-//                outfile_miss << "position: " << debug_pos << endl;
-//                outfile_miss << "event: ";
-//                it->print();
-//            }
-            ++miss_cnt;
-        }
-    }
-    return miss_cnt;
-}
-#else
+
 //RETURN true when cover is possible
-bool Sequence::try_cover(event_set *events, int pos) {
+bool Sequence::try_cover(attribute_set *events, int pos) {
     for (auto it: *events) {
         if (!try_cover(it, pos))
             return false;
@@ -397,7 +341,6 @@ bool Sequence::try_cover(event_set *events, int pos) {
     }
     return true;
 }
-#endif
 
 //RETURN true when cover is possible
 bool Sequence::try_cover(Attribute *e, int pos) {
@@ -420,20 +363,11 @@ void Sequence::cover_singletons(Pattern ***singletons) {
     for (int i = 0; i < par->nr_events; ++i) {
         if (is_covered[i])    //this multi-event is already covered
             continue;
-
         for (auto it = mev_time[i]->get_events()->begin(); it != mev_time[i]->get_events()->end(); ++it) {
             if (!mev_time[i]->test_covered((*it)->id)) {   //if not yet covered
                 //fill the is_covered array in Event
                 mev_time[i]->cover((*it), singletons[(*it)->attribute][(*it)->symbol], false);
-#ifdef MISS
-                singletons[(*it)->attribute][(*it)->symbol]->update_usages(0, 0);
-#else
                 singletons[(*it)->attribute][(*it)->symbol]->update_usages(0);
-#endif
-#ifdef LSH
-                    int seq_id = mev_time[i]->seqid;
-                    cover_pattern[seq_id].insert(singletons[(*it)->attribute][(*it)->symbol]);
-#endif
             }
         }
     }

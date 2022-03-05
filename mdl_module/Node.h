@@ -35,8 +35,8 @@ public:
     }
 
 
-    bool find_pattern(Pattern *p, int start_pos, event_set::iterator it,
-                      event_set::iterator end)        //True when event_set found and thus not frequent, False otherwise
+    bool find_pattern(Pattern *p, int start_pos, attribute_set::iterator it,
+                      attribute_set::iterator end)        //True when attribute_set found and thus not frequent, False otherwise
     {
         if (infrequent)
             return true;
@@ -62,8 +62,8 @@ public:
             return children[pos]->find_pattern(p, start_pos, ++it, end);
     }
 
-    void add_infrequent_pattern(Pattern *p, event_set::iterator it,
-                                event_set::iterator end)    //evs is SORTED: first ascending on attribute-level and then ascending alphabetically
+    void add_infrequent_pattern(Pattern *p, attribute_set::iterator it,
+                                attribute_set::iterator end)    //evs is SORTED: first ascending on attribute-level and then ascending alphabetically
     {
         if (it == end) {
             if (timestep == p->get_length() - 1)

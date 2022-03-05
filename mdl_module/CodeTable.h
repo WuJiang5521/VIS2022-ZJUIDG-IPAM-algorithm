@@ -43,15 +43,14 @@ public:
     int get_ct_length() const { return length_ct; };
 
     codeTable_set *get_ct() const { return code_table; };
-#ifdef MISS
-    MathUtil *get_math_util() const { return mu; }
-#endif
 
     void set_sz_ct_c(Sequence *s) {
         sz_ct_c = compute_sz_ct_c(s);
     }; //only called when the final CT for this data is computed
 
     list<usg_sz> *get_nr_non_singletons_per_size();
+
+    bool find_pattern(Pattern *p);
 
 private:
     Parameters *par;

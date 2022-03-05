@@ -1,16 +1,15 @@
-#include "Common.h"
 #include "mdl_enter.h"
-#include "../base/BaseDS.hpp"
+
 
 using namespace std;
+using json = nlohmann::json;
 
-int start_mdl(int argc, char **argv) {
+void mdl_run(MDLParameters &arg, const string& insert_patterns_filename) {
     Parameters parameters;
     parameters.release = true;
 
     parameters.runtimes = true;
     parameters.debug = false;
-    parameters.debug2 = false;
 
     parameters.gapvariants = true;
     parameters.prune_check = false;            //mag eruit
@@ -18,8 +17,9 @@ int start_mdl(int argc, char **argv) {
     parameters.whitelist = false;
     parameters.prune_est_gain = true;
     parameters.prune_tree = true;
-    parameters.FP_windows = false;            //to print the found patterns in the data AND to translate patterns from text-data
-    parameters.fill_patterns = false;        //for aligned text-data
+    parameters.FP_windows = arg.FP_windows;            //to print the found patterns in the data AND to translate patterns from text-data
+    parameters.fill_patterns = arg.fill_patterns;        //for aligned text-data
+
 
     ///////////////////////////////////////////////////
     ///				For debug output				///
@@ -33,81 +33,36 @@ int start_mdl(int argc, char **argv) {
     parameters.cnt_infreq_materialized = 0;
     parameters.cnt_infreq = 0;
 
-    parameters.minsup = 5;
-    parameters.dummy_file = "";
-    parameters.input_filename = "";
-    string inter_filename = "";
-    if (parameters.release) {
-        //DEFAULT values
-        parameters.minsup = 5;
-        parameters.dummy_file = "";
-        parameters.input_filename = "";
-        poptarg = nullptr;    /* pointer to the start of the option argument  */
-        poptind = 1;       /* number of the next argv[] to be evaluated    */
-        popterr = 1;       /* non-zero if a question mark should be returned
-                          * when a non-valid option character is detected */
-        char opt_pattern[] = "i:t:m:p:w:f:o:";
-        int c, pos;
-        while ((c = get_opt(argc, argv, opt_pattern)) != -1) {
-            switch (c) {
-                case 'w':
-                    parameters.FP_windows = (atoi(poptarg) != 0);
-                    break;
-                case 'f':
-                    parameters.fill_patterns = (atoi(poptarg) != 0);
-                    break;
-                case 'i':
-                    parameters.input_filename = string(poptarg);
-                    pos = parameters.input_filename.find_last_of('.');
-                    if (pos != parameters.input_filename.length() - 4 ||
-                        parameters.input_filename.substr(pos, parameters.input_filename.length() - 1) != ".dat") {
-                        cout << "ERROR: inputfile must be '.dat'-file.";
-                        return 1;
-                    }
-                    break;
-                case 'm':
-                    parameters.minsup = atoi(poptarg);
-                    break;
-                case 'p':
-                    parameters.dummy_file = string(poptarg);
-                    pos = parameters.dummy_file.find_last_of('.');
-                    if (pos == -1 || pos != parameters.dummy_file.length() - 4 ||
-                        parameters.dummy_file.substr(pos, parameters.dummy_file.length() - 1) != ".txt") {
-                        cout << "ERROR: pattern-file must be '.txt'-file.\n";
-                        return 1;
-                    }
-                    break;
-                case 'o':
-                    inter_filename = string(poptarg);
-                    pos = inter_filename.find_last_of('.');
-                    if (pos != inter_filename.length() - 4 ||
-                        inter_filename.substr(pos, inter_filename.length() - 1) != ".dat") {
-                        cout << "ERROR: interfile must be '.dat'-file.";
-                        return 1;
-                    }
-                    break;
-                default:
-                    cout << "Usage:\n"
-                         << "\t-i\t<inputfile>.dat\t\t\t\t\t(mandatory)\n"
-                         << "\t-p\t<pattern-file>.txt\t\t\t\t(default='" << parameters.dummy_file << "')\n"
-                         << "\t-m\tminimum support\t\t\t\t\t(default=" << parameters.minsup << ")\n"
-                         << "\t-w\ttrue=print all found patterns to file (also used to translate patterns from text-data)\n"
-                         << "\t-f\ttrue=fill-patterns are used to aligne text-data\n";
-                    return 1;
-            }
-        }
-        if (parameters.input_filename.empty()) {
-            cout << "ERROR: <inputfile>.dat is mandatory, type -h for help.\n";
-            return 1;
-        }
-    }
+
+    ///////////////////////////////////////////////////
+    ///				For Alg Setting  				///
+    ///////////////////////////////////////////////////
+    parameters.minsup = arg.minsup;
+    parameters.dummy_file = arg.dummy_filename;
+    parameters.input_filename = arg.input_filename;
+    parameters.pattern_window_index_min = arg.pattern_window_index_min;
+    parameters.pattern_window_index_max = arg.pattern_window_index_max;
+    parameters.pattern_length_min = arg.pattern_length_min;
+    parameters.pattern_length_max = arg.pattern_length_max;
+
+
+    ///////////////////////////////////////////////////
+    ///				For result output				///
+    ///////////////////////////////////////////////////
+//    parameters.pattern_in_sequences_file = arg.pattern_in_sequences_file;
+//    parameters.pattern_pos_in_sequences_file = arg.pattern_pos_in_sequences_file;
+//    parameters.sequences_file = arg.sequences_file;
+//    parameters.winner_file = arg.winner_file;
+    parameters.pattern_file = arg.pattern_file;
+    parameters.attr_use = arg.attr_use;
+//    parameters.pattern_id_file = arg.pattern_id_file;
 
     FILE *f;
     if (!(f = fopen(parameters.input_filename.c_str(), "r"))) {
         cout << "ERROR opening data file: " << parameters.input_filename << "\n";
         if (!parameters.release)
             system("pause");
-        return 1;
+        return;
     }
     parameters.seq = new Sequence(f, &parameters);
     fclose(f);
@@ -116,38 +71,35 @@ int start_mdl(int argc, char **argv) {
         cout << "ERROR reading sequence or patterns!\n";
         if (!parameters.release)
             system("pause");
-        return 1;
+        return;
     }
 
     stringstream ss;
     ss << parameters.minsup;
     int strt = parameters.input_filename.find_last_of("/\\") + 1, nd = parameters.input_filename.find_last_of('.');
     string temp = parameters.input_filename.substr(strt, nd - strt);
-    parameters.output_filename = "output_fileData_" + temp;
+    parameters.output_filename = string(arg.output_dir) + "/" + "debug_fileData_" + temp;
+    parameters.output_dir = arg.output_dir;
 
-    if (parameters.fill_patterns)    //to make sure all (sub)streams are equally long they are padded with an extra symbol (last in alphabet) which is disregarded in computing size(D, CT)
-    {
+    if (parameters.fill_patterns) {    //to make sure all (sub)streams are equally long they are padded with an extra symbol (last in alphabet) which is disregarded in computing size(D, CT)
         parameters.fill_pattern = new bool[parameters.nr_of_attributes];
         for (int attr = 0; attr < parameters.nr_of_attributes; ++attr)
             parameters.fill_pattern[attr] = true;
     }
-    clock_t t0 = clock();
-    auto *mdl = new mdl_enter(&parameters);
-    cout << "MDL_MODULE time: " << (clock() - t0)*1.0/CLOCKS_PER_SEC << "s" << endl;
-    delete mdl;
 
-    if (!parameters.release)
-        system("pause");
-    return 0;
+    std::ifstream insert_patterns_stream(insert_patterns_filename, std::ifstream::binary);
+    string insert_patterns_str;
+    insert_patterns_stream >> insert_patterns_str;
+    json insert_patterns = json::parse(insert_patterns_str);
+    puts("parse insert pattern json");
+
+    clock_t t0 = clock();
+    auto *mdl = new mdl_enter(&parameters, insert_patterns);
+    cout << "mdl_module time: " << (clock() - t0)*1.0/CLOCKS_PER_SEC << "s" << endl;
+    delete mdl;
 }
-#ifdef MISS
-bool miss_print_debug = false;
-std::ofstream outfile_miss;
-#endif
-mdl_enter::mdl_enter(Parameters *par) : par(par) {
-#ifdef MISS
-    outfile_miss.open("./miss_debug_output.txt"); //DEBUG
-#endif
+
+mdl_enter::mdl_enter(Parameters *par, json& insert_patterns) : par(par) {
     output_stream << par->seq->print_sequence(false);      //DEBUG
 
     par->start = time(nullptr);
@@ -161,9 +113,6 @@ mdl_enter::mdl_enter(Parameters *par) : par(par) {
     black_list = new pattern_set;
     white_list = new pattern_set;
     ct_on_usg = new usagepattern_set;        //set to combine CTxCT based on usage
-#ifdef LSH
-    candidate_order = new priority_queue<pair<int, pair<Pattern*, Pattern*>>>();
-#endif
 
     //build singletons
     int **tree_ids = par->seq->get_tree_ids();
@@ -171,33 +120,14 @@ mdl_enter::mdl_enter(Parameters *par) : par(par) {
     int *alphabet_sizes = par->alphabet_sizes;
     for (int aid = 0; aid < par->nr_of_attributes; ++aid) {
         for (int sym = 0; sym < alphabet_sizes[aid]; ++sym) {
-            auto **event_sets = new event_set *[1];
-            event_sets[0] = new event_set;
+            auto **event_sets = new attribute_set *[1];
+            event_sets[0] = new attribute_set;
             event_sets[0]->insert(new Attribute(sym, aid, 0, tree_ids[aid][sym]));
             auto *p = new Pattern(1, event_sets, par->seq);
             ct->insert_pattern(p);
             ct_on_usg->insert(p);
         }
     }
-#ifdef LSH
-    vector<Pattern*> singletons;
-    PatternTable::pattern_id_map.clear();
-    PatternTable::pattern_id_table.clear();
-    int initial_pattern_id_map_top = 0;
-    for (auto & p : *(ct->get_ct())) {
-        singletons.push_back(p);
-        PatternTable::pattern_id_map[p] = initial_pattern_id_map_top++;
-        PatternTable::pattern_id_table.push_back(p);
-    }
-
-    PatternTable::table_size = initial_pattern_id_map_top;
-    PatternTable::pre_table.resize(PatternTable::table_size);
-    PatternTable::last_table.resize(PatternTable::table_size);
-    for (int i = 0; i < PatternTable::table_size; ++i) {
-        PatternTable::pre_table[i].resize(PatternTable::table_size, 0);
-        PatternTable::last_table[i].resize(PatternTable::table_size, 0);
-    }
-#endif
 
     //build a tree that represents all patterns of length == 1
     //each timestep in a new candidate is run through this tree to see if it still can be frequent
@@ -208,37 +138,20 @@ mdl_enter::mdl_enter(Parameters *par) : par(par) {
     auto it_ct_1 = ct_on_usg->begin(), it_ct_2 = ct_on_usg->begin(), begin_ct = ct_on_usg->begin(), end_ct = ct_on_usg->end();    //iterators to update candidate list
 
     auto *g_cover = new Cover(par->seq, ct, false);    //determine ST size
-#ifdef LSH
-    delete candidate_order;
-    candidate_order = new priority_queue<pair<int, pair<Pattern*, Pattern*>>>();
-    for (int i = 0; i < (*PatternTable::table).size(); ++i) {
-        for (int j = 0; j < (*PatternTable::table)[i].size(); ++j) {
-            candidate_order->push(make_pair((*PatternTable::table)[i][j], make_pair(PatternTable::pattern_id_table[i], PatternTable::pattern_id_table[j])));
-        }
-    }
-#endif
 
     auto *current_usgSz = new usg_sz(g_cover->get_total_usage(), g_cover->get_sz_sequence_and_ct());
+
     double init_sz = current_usgSz->sz;
 
-    double STsize = current_usgSz->sz;
     output_stream << "\n\nST " << *current_usgSz << endl;//DEBUG
     output_stream << ct->print_ct(false);//DEBUG
 
     while (true) {
-#ifdef LSH
-        if ((candidate_order->empty() || candidate_order->top().first < cand_threshold * par->seq->get_nr_sequences()) &&
-            cand->empty())                //we stop when there are no more candidates to generate. NOTE it_ct_2 reaches end first
-            break;
-        generate_candidates(current_usgSz);
-#else
         if (it_ct_2 == end_ct &&
         cand->empty())                //we stop when there are no more candidates to generate. NOTE it_ct_2 reaches end first
             break;
         //update candidates
         generate_candidates(&it_ct_1, &it_ct_2, &begin_ct, &end_ct, current_usgSz);
-#endif
-//        cout << "*****" << endl;
         if (cand->empty())
             continue;
 
@@ -249,7 +162,6 @@ mdl_enter::mdl_enter(Parameters *par) : par(par) {
 
         if (par->prune_est_gain && top->get_estimated_gain() <= 0)
             continue;
-
         load_or_build_min_windows(top);
 
         //prune on minsup
@@ -259,33 +171,12 @@ mdl_enter::mdl_enter(Parameters *par) : par(par) {
         if (!ct->insert_pattern(
                 top))                //pattern already present. NOTE this check must be after set_min_windows, because pattern equality is also based on support
             continue;                                //already present
-#ifdef LSH
-        PatternTable::check_table();
-        int pattern_id_map_top = 0;
-        PatternTable::pattern_id_table.clear();
-        PatternTable::pattern_id_map.clear();
-        for (auto & p : *(ct->get_ct())) {
-            PatternTable::pattern_id_map[p] = pattern_id_map_top++;
-            PatternTable::pattern_id_table.push_back(p);
-        }
 
-        PatternTable::table_size = pattern_id_map_top;
-        if (PatternTable::table_size > PatternTable::pre_table.size()) {
-            PatternTable::pre_table.resize(PatternTable::table_size);
-            PatternTable::last_table.resize(PatternTable::table_size);
-            for (int i = 0; i < PatternTable::table_size; ++i) {
-                PatternTable::pre_table[i].resize(PatternTable::table_size, 0);
-                PatternTable::last_table[i].resize(PatternTable::table_size, 0);
-            }
-        }
-        PatternTable::clear_table(PatternTable::table_size);
-#endif
         //Cover
         g_cover = new Cover(par->seq, ct, false);
         double new_size = g_cover->get_sz_sequence_and_ct();
         int new_total_usage = g_cover->get_total_usage();
 
-//        cout << "current_size = " << current_usgSz->sz << "  new_size = " << new_size << " dL: " << (init_sz - current_usgSz->sz) / init_sz * 100.0 << endl;//DEBUG
         //Check improvement
         if (new_size < current_usgSz->sz) {
             current_usgSz = postprune(top, new_total_usage, new_size);                //post acceptance pruning
@@ -301,21 +192,9 @@ mdl_enter::mdl_enter(Parameters *par) : par(par) {
             cand->clear();
             end_ct = ct_on_usg->end();
             begin_ct = ct_on_usg->begin();
-#ifdef LSH
-            delete candidate_order;
-            candidate_order = new priority_queue<pair<int, pair<Pattern*, Pattern*>>>();
-            for (auto it1 = (ct->get_ct())->begin(); it1 != ct->get_ct()->end(); ++it1) {
-                for (auto it2 = it1; it2 != ct->get_ct()->end(); ++it2) {
-                    Pattern *minp = *it1 > *it2 ? *it2 : *it1;
-                    Pattern *maxp = *it1 <= *it2 ? *it2 : *it1;
-                    candidate_order->push(make_pair((*PatternTable::table)[PatternTable::pattern_id_map[minp]][PatternTable::pattern_id_map[maxp]],
-                                                    make_pair(minp, maxp)));
-                }
-            }
-#else
+
             it_ct_1 = codeTable_set::iterator(begin_ct);            //hard copy
             it_ct_2 = codeTable_set::iterator(begin_ct);            //hard copy
-#endif
 
             par->cnt_acc++;
             output_stream << "top accepted: ";
@@ -324,26 +203,187 @@ mdl_enter::mdl_enter(Parameters *par) : par(par) {
             par->cnt_rej++;
             ct->delete_pattern(top);
             ct->rollback();            //we need to rollback because all usages must be correct before we can generate more candidates
-#ifdef LSH
-            PatternTable::rollback_table();
-#endif
         }
 
     }
 
 
     ct->delete_unused_patterns();            //Only at the very end
-    g_cover = new Cover(par->seq, ct, false);
 
-#ifdef MISS
-    int debug_miss_cnt = 0;
-    for (auto it_ct : *ct->get_ct()) {
-        if (it_ct->get_usage() > 0 && it_ct->get_length() > 1) {
-            debug_miss_cnt += it_ct->get_usage_miss();
+    this->insert_patterns(insert_patterns);
+
+    cover = new Cover(par->seq, ct, false);
+    save_debug_files(current_usgSz, init_sz);
+    save_result_files();
+}
+
+
+mdl_enter::mdl_enter(Parameters *par, json& code_table, vector<int>& delete_patterns_id, json& insert_patterns) : par(par) {
+    par->start = time(nullptr);
+    par->cnt_exact = 0;
+    par->cnt_subset = 0;
+    par->cnt_union_subset = 0;
+    par->cnt_unrelated = 0;
+    ct = new CodeTable(par->seq);
+    ct_on_usg = new usagepattern_set;        //set to combine CTxCT based on usage
+    cand = new candpattern_set;
+    black_list = new pattern_set;
+    white_list = new pattern_set;
+
+    int **tree_ids = par->seq->get_tree_ids();
+    for (auto & pattern : code_table) {
+        json p = pattern["hits"];
+        auto **event_sets = new attribute_set *[p.size()];
+        int event_id = 0;
+        for (json::iterator event_it = p.begin(); event_it != p.end(); ++event_it, ++event_id) {
+            event_sets[event_id] = new attribute_set;
+            int attr_id = 0;
+            for (json::iterator attr_it = event_it->begin(); attr_it != event_it->end(); ++attr_it, ++attr_id) {
+                if (*attr_it == "")
+                    continue;
+                int sym = BaseAttr::from_key_value(BaseAttr::get_keys()[attr_id], *attr_it);
+                event_sets[event_id]->insert(new Attribute(sym, attr_id, event_id, tree_ids[attr_id][sym]));
+            }
+        }
+        auto *p_ct = new Pattern(p.size(), event_sets, par->seq, (int)pattern["id"]);
+        ct->insert_pattern(p_ct);
+        Pattern::id_top = max(Pattern::id_top, (int)pattern["id"]);
+    }
+
+    auto *old_g_cover = new Cover(par->seq, ct, false);
+    auto *old_usgSz = new usg_sz(old_g_cover->get_total_usage(), old_g_cover->get_sz_sequence_and_ct());
+
+    for (auto &p : *(ct->get_ct())) {
+        if (find(delete_patterns_id.begin(), delete_patterns_id.end(), p->get_id()) != delete_patterns_id.end()) {
+            ct->delete_pattern(p);
+            break;
         }
     }
-    cout << "miss count: " << debug_miss_cnt << endl;
-#endif
+    this->insert_patterns(insert_patterns);
+
+    cover = new Cover(par->seq, ct, false);    //determine ST size
+    auto *current_usgSz = new usg_sz(cover->get_total_usage(), cover->get_sz_sequence_and_ct());
+    save_debug_files(current_usgSz, old_usgSz->sz);
+    save_result_files();
+}
+
+
+void mdl_enter::insert_patterns(json& insert_patterns) {
+    int **tree_ids = par->seq->get_tree_ids();
+    for (auto & insert_pattern : insert_patterns) {
+        auto **event_sets = new attribute_set *[insert_pattern.size()];
+        int event_id = 0;
+        for (json::iterator event_it = insert_pattern.begin(); event_it != insert_pattern.end(); ++event_it, ++event_id) {
+            event_sets[event_id] = new attribute_set;
+            int attr_id = 0;
+            for (json::iterator attr_it = event_it->begin(); attr_it != event_it->end(); ++attr_it, ++attr_id) {
+                if (*attr_it == "")
+                    continue;
+                int sym = BaseAttr::from_key_value(BaseAttr::get_keys()[attr_id], *attr_it);
+                event_sets[event_id]->insert(new Attribute(sym, attr_id, event_id, tree_ids[attr_id][sym]));
+            }
+        }
+        auto *p = new Pattern(insert_pattern.size(), event_sets, par->seq);
+        if (!ct->find_pattern(p))
+            ct->insert_pattern(p);
+    }
+}
+
+
+void mdl_modify_and_run(const string& old_model_pattern_filename, vector<int>& delete_patterns_id, const string& insert_patterns_filename, MDLParameters &arg) {
+    Parameters parameters;
+    parameters.release = true;
+
+    parameters.runtimes = true;
+    parameters.debug = false;
+
+    parameters.gapvariants = true;
+    parameters.prune_check = false;            //mag eruit
+    parameters.blacklist = false;            //mag eruit
+    parameters.whitelist = false;
+    parameters.prune_est_gain = true;
+    parameters.prune_tree = true;
+    parameters.FP_windows = arg.FP_windows;            //to print the found patterns in the data AND to translate patterns from text-data
+    parameters.fill_patterns = arg.fill_patterns;        //for aligned text-data
+
+
+    ///////////////////////////////////////////////////
+    ///				For debug output				///
+    ///////////////////////////////////////////////////
+    parameters.cnt_covers = 0;
+    parameters.cnt_mat_pat = 0;
+    parameters.cnt_acc = 0;
+    parameters.cnt_rej = 0;
+    parameters.cnt_acc_var = 0;
+    parameters.cnt_rej_var = 0;
+    parameters.cnt_infreq_materialized = 0;
+    parameters.cnt_infreq = 0;
+
+    ///////////////////////////////////////////////////
+    ///				For Alg Setting  				///
+    ///////////////////////////////////////////////////
+    parameters.minsup = arg.minsup;
+    parameters.dummy_file = arg.dummy_filename;
+    parameters.input_filename = arg.input_filename;
+    parameters.pattern_window_index_min = arg.pattern_window_index_min;
+    parameters.pattern_window_index_max = arg.pattern_window_index_max;
+    parameters.pattern_length_min = arg.pattern_length_min;
+    parameters.pattern_length_max = arg.pattern_length_max;
+
+    ///////////////////////////////////////////////////
+    ///				For result output				///
+    ///////////////////////////////////////////////////
+    parameters.pattern_file = arg.pattern_file;
+    parameters.attr_use = arg.attr_use;
+
+    FILE *f;
+    if (!(f = fopen(parameters.input_filename.c_str(), "r"))) {
+        cout << "ERROR opening data file: " << parameters.input_filename << "\n";
+        if (!parameters.release)
+            system("pause");
+        return;
+    }
+    parameters.seq = new Sequence(f, &parameters);
+    fclose(f);
+
+    if (parameters.seq->error_flag) {
+        cout << "ERROR reading sequence or patterns!\n";
+        if (!parameters.release)
+            system("pause");
+        return;
+    }
+
+    int strt = parameters.input_filename.find_last_of("/\\") + 1, nd = parameters.input_filename.find_last_of('.');
+    string temp = parameters.input_filename.substr(strt, nd - strt);
+    parameters.output_filename = string(arg.output_dir) + "/" + "debug_fileData_" + temp;
+    parameters.output_dir = arg.output_dir;
+
+    if (parameters.fill_patterns) {    //to make sure all (sub)streams are equally long they are padded with an extra symbol (last in alphabet) which is disregarded in computing size(D, CT)
+        parameters.fill_pattern = new bool[parameters.nr_of_attributes];
+        for (int attr = 0; attr < parameters.nr_of_attributes; ++attr)
+            parameters.fill_pattern[attr] = true;
+    }
+    std::ifstream old_model_pattern_stream(old_model_pattern_filename, std::ifstream::binary);
+    string old_model_pattern_str;
+    old_model_pattern_stream >> old_model_pattern_str;
+    json old_model_patterns = json::parse(old_model_pattern_str);
+
+    std::ifstream insert_patterns_stream(insert_patterns_filename, std::ifstream::binary);
+    string insert_patterns_str;
+    insert_patterns_stream >> insert_patterns_str;
+    json insert_patterns = json::parse(insert_patterns_str);
+    puts("parse json");
+
+
+    auto* new_mdl_model = new mdl_enter(&parameters, old_model_patterns["code_table"], delete_patterns_id, insert_patterns);
+    delete new_mdl_model;
+}
+
+
+void mdl_enter::save_debug_files(usg_sz *current_usgSz, double init_sz) {
+
+    double STsize = current_usgSz->sz;
+
     cout << "nr seq: " << par->seq->get_nr_sequences() << endl;
     double s_len_avg = 0;
     for (int i = 0; i < par->seq->get_nr_sequences(); ++i) {
@@ -364,15 +404,8 @@ mdl_enter::mdl_enter(Parameters *par) : par(par) {
         }
     }
     cout << "P num: " << ct_no_singleton_cnt << " P len avg: " << (double)ct_len_avg / ct->get_ct()->size() << endl;
-    double now_L = g_cover->get_sz_sequence_and_ct();
-#ifdef MISS
-//        for (auto it_ct : *ct->get_ct()) {
-//            if (it_ct->get_usage() > 0 && it_ct->get_length() > 1) {
-//                now_L -= it_ct->get_usage_miss() *
-//                        it_ct->get_codelength_miss();
-//            }
-//        }
-#endif
+    double now_L = cover->get_sz_sequence_and_ct();
+
     cout << "percent of delta L: " << (init_sz - now_L) / init_sz * 100.0 << endl;
     //compute breakdown results for found patterns
     if (!par->dummy_file.empty()) {
@@ -386,11 +419,6 @@ mdl_enter::mdl_enter(Parameters *par) : par(par) {
             output_stream << "Dummy " << i << ": " << par->dummies[i]->to_string() << endl;
     }
 
-#ifdef MISS // DEBUG
-//    miss_print_debug = true;
-//    cover = new Cover(par->seq, ct, false);
-#endif
-
     output_stream << ct->print_ct(false);    //NOTE: after search for Dummy patterns
 
     par->length_CT = ct->get_ct_length();
@@ -398,7 +426,7 @@ mdl_enter::mdl_enter(Parameters *par) : par(par) {
     par->nr_non_singletons_per_size = ct->get_nr_non_singletons_per_size();
 
     par->STsize = STsize;
-    par->CTsize = g_cover->get_sz_sequence_and_ct();
+    par->CTsize = cover->get_sz_sequence_and_ct();
     par->perc = par->CTsize / par->STsize;
     par->eind = time(nullptr);
 
@@ -440,12 +468,12 @@ mdl_enter::mdl_enter(Parameters *par) : par(par) {
 
     if (par->runtimes) {
         bool exist = false;
-        if (FILE *testFile = fopen("runtimes.csv", "r")) {
+        if (FILE *testFile = fopen((par->output_filename + "_runtimes.csv").c_str(), "r")) {
             fclose(testFile);
             exist = true;
         }
 
-        FILE *runFile = fopen("runtimes.csv", "a");
+        FILE *runFile = fopen((par->output_filename + "_runtimes.csv").c_str(), "a");
         if (runFile != nullptr) {
             if (!exist)
                 fprintf(runFile, "%s", par->header().c_str());
@@ -454,10 +482,81 @@ mdl_enter::mdl_enter(Parameters *par) : par(par) {
             fclose(runFile);
         }
     }
-#ifdef LSH
-    PatternTable::clear_table(PatternTable::table_size);
-#endif
+}
 
+
+void mdl_enter::save_result_files() {
+    string pattern_file = par->output_dir + "/" + par->pattern_file;
+    ofstream pattern_stream;
+    pattern_stream.open(pattern_file, ios::out);
+
+    json patterns;
+    json patterns_in_sequences;
+    json code_table;
+
+
+    map<Pattern *, int> pat_id;
+    int id_top = 0;
+    json sequence = vector<int>(0), sequences;
+    for (int i = 0, seq_i = 0; i < par->nr_events; ++i, ++seq_i) {
+        auto events = par->seq->mev_time[i];
+        for (int j = 0; j < events->get_size(); ++j) {
+            if (events->is_covered[j]->get_length() <= 1) {
+                continue;
+            }
+            if (pat_id.find(events->is_covered[j]) == pat_id.end()) {
+                json hits;
+                for (int ts = 0; ts < events->is_covered[j]->get_length(); ++ts) {
+                    auto e = events->is_covered[j]->get_symbols(ts);
+                    json hit(vector<string>(par->nr_of_attributes));
+                    for (auto a : *e) {
+                        hit[a->attribute] = BaseAttr::get_attrs(BaseAttr::get_keys()[a->attribute])[a->symbol];
+                    }
+                    hits.push_back(hit);
+                }
+                json pattern;
+                pattern["hits"] = hits;
+                pattern["id"] = events->is_covered[j]->get_id();
+                patterns.push_back(pattern);
+                pat_id[events->is_covered[j]] = id_top++;
+            }
+            json pattern_occ;
+            pattern_occ["pattern_index"] = pat_id[events->is_covered[j]];
+            pattern_occ["pattern_position"] = seq_i;
+            sequence.push_back(pattern_occ);
+            i += events->is_covered[j]->get_length() - 1;
+            seq_i += events->is_covered[j]->get_length() - 1;
+            break;
+        }
+        if (i + 1 == par->nr_events || par->seq->mev_time[i + 1]->seqid != par->seq->mev_time[i]->seqid) {
+            seq_i = -1;
+            sequences.push_back(sequence);
+            sequence.clear();
+        }
+    }
+    for (auto & p : *(ct->get_ct())) {
+        json hits;
+        for (int ts = 0; ts < p->get_length(); ++ts) {
+            auto e = p->get_symbols(ts);
+            json hit(vector<string>(par->nr_of_attributes));
+            for (auto a : *e) {
+                hit[a->attribute] = BaseAttr::get_attrs(BaseAttr::get_keys()[a->attribute])[a->symbol];
+            }
+            hits.push_back(hit);
+        }
+        json pattern;
+        pattern["hits"] = hits;
+        pattern["id"] = p->get_id();
+        code_table.push_back(pattern);
+    }
+    json output_json;
+    output_json["desc_len"] = cover->get_sz_sequence_and_ct();
+    output_json["patterns"] = patterns;
+    output_json["patterns_in_sequences"] = sequences;
+    output_json["code_table"] = code_table;
+    pattern_stream << output_json.dump();
+
+    pattern_stream.close();
 }
 
 
@@ -505,7 +604,7 @@ void mdl_enter::break_down(Pattern *p) {
             subset = false;
             while (dummy_ts < d->length) {
                 bool complete_timestep = true;
-                event_set *evs = p->get_symbols(l);
+                attribute_set *evs = p->get_symbols(l);
                 for (auto ev : *evs) {
                     bool complete_symbol = false;
                     attr_sym_set *as = d->events[dummy_ts];
@@ -541,7 +640,7 @@ void mdl_enter::break_down(Pattern *p) {
     //FOR UNION_SUBSET MATCH -> alle events komen in ��n Dummy in verkeerde volgorde voor OF alle events komen in een (verschillende) Dummy voor
     bool union_subset = true;
     for (int l = 0; l < p->get_length(); ++l) {
-        event_set *evs = p->get_symbols(l);
+        attribute_set *evs = p->get_symbols(l);
         for (auto ev : *evs) {
             //check for every event in the pattern if it occurs in one of the dummies
             bool found_event = false;
@@ -661,7 +760,7 @@ usg_sz *mdl_enter::try_variations(Pattern *accepted, usg_sz *current_usgSz) {
             set<int> *gaps = w->get_gaps();
 
             for (int gap : *gaps) { //loop over all gap-positions
-                event_set *gap_events = mev_time[gap]->get_events();
+                attribute_set *gap_events = mev_time[gap]->get_events();
                 for (auto ev : *gap_events) { //loop over all events at the gap-position               {
                     int gap_cnt = 0;
                     int gap_ID = mev_time[gap]->id;
@@ -672,14 +771,14 @@ usg_sz *mdl_enter::try_variations(Pattern *accepted, usg_sz *current_usgSz) {
                         else
                             break;
                     }
-                    auto **event_sets = new event_set *[new_length];
+                    auto **event_sets = new attribute_set *[new_length];
                     for (int l = 0; l < new_length; ++l) {
                         if (l == gap_position) {
                             gap_cnt = 1;
-                            event_sets[l] = new event_set;
+                            event_sets[l] = new attribute_set;
                             event_sets[l]->insert(ev);
                         } else
-                            event_sets[l] = new event_set(*accepted->get_symbols(l - gap_cnt)); //hard copy
+                            event_sets[l] = new attribute_set(*accepted->get_symbols(l - gap_cnt)); //hard copy
                     }
                     auto *newp = new Pattern(new_length, event_sets, par->seq, accepted,
                                              nullptr);        //we call this constructor because it doesn't build the min_windows yet
@@ -724,16 +823,8 @@ usg_sz *mdl_enter::try_variations(Pattern *accepted, usg_sz *current_usgSz) {
                                 } else {
                                     par->cnt_rej_var++;
                                     ct->delete_pattern(newp);
-#ifdef LSH
-//                                    --PatternTable::total_p_id;
-#endif
                                 }
                             }
-#ifdef LSH
-//                            else {
-//                                --PatternTable::total_p_id;
-//                            }
-#endif
                         }
                     } else
                         delete newp;
@@ -745,35 +836,7 @@ usg_sz *mdl_enter::try_variations(Pattern *accepted, usg_sz *current_usgSz) {
     delete temp_cand;
     return current_usgSz;
 }
-#ifdef LSH
-void MDL_FIRST_MINING::generate_candidates(usg_sz *current_usgSz) {
-    bool stop = false;
-    while (!candidate_order->empty()) {
-        auto top = candidate_order->top();
-        if (top.first < cand_threshold * par->seq->get_nr_sequences()) {
-            break;
-        }
-        Pattern * p1 = top.second.first;
-        Pattern * p2 = top.second.second;
-        if ((p1)->get_support() < par->minsup) {
-            candidate_order->pop();
-            continue;
-        }
-        if ((p2)->get_support() < par->minsup) {
-            candidate_order->pop();
-            continue;
-        }
 
-        auto *result = new pattern_set;
-        stop = combine_patterns(p1, p2, current_usgSz->usg, result);
-        if (stop)
-            break;
-
-        insert_candidates(result);
-        candidate_order->pop();
-    }
-}
-#else
 void mdl_enter::generate_candidates(usagepattern_set::iterator *pt_ct_1, usagepattern_set::iterator *pt_ct_2,
                                     usagepattern_set::iterator *pt_begin_ct, usagepattern_set::iterator *pt_end_ct,
                                     usg_sz *current_usgSz) {
@@ -824,7 +887,6 @@ void mdl_enter::generate_candidates(usagepattern_set::iterator *pt_ct_1, usagepa
     }
 
 }
-#endif
 
 //Only adds the patterns if they are not already present
 void mdl_enter::insert_candidates(pattern_set *list) {
@@ -895,7 +957,7 @@ bool mdl_enter::combine_patterns(Pattern *a, Pattern *b, int total_usage, patter
 }
 
 //RETURN true when eventsets a and b contain a similar attribute
-bool mdl_enter::check_eventset_attribute_overlap(event_set *a, event_set *b) {
+bool mdl_enter::check_eventset_attribute_overlap(attribute_set *a, attribute_set *b) {
     bool result = false;
     bool *present_attributes = new bool[par->nr_of_attributes];
     for (int i = 0; i < par->nr_of_attributes; ++i)
@@ -956,8 +1018,8 @@ bool mdl_enter::check_pattern_attribute_overlap(Pattern *a, Pattern *b,
     return false;
 }
 
-event_set *mdl_enter::join_eventsets(event_set *a, event_set *b) {
-    auto *result = new event_set;
+attribute_set *mdl_enter::join_eventsets(attribute_set *a, attribute_set *b) {
+    auto *result = new attribute_set;
     for (auto ita : *a)
         result->insert(ita);
     for (auto itb : *b)
@@ -969,12 +1031,12 @@ event_set *mdl_enter::join_eventsets(event_set *a, event_set *b) {
 Pattern *mdl_enter::build_interleaved_pattern(Pattern *singleton, Pattern *p, int pos_singleton) {
     int new_length = p->get_length() + 1;
     int pos_p = 0;
-    auto **event_sets = new event_set *[new_length];
+    auto **event_sets = new attribute_set *[new_length];
     for (int pos = 0; pos < new_length; ++pos) {
         if (pos == pos_singleton)
-            event_sets[pos] = new event_set(*singleton->get_symbols(0)); //hard copy
+            event_sets[pos] = new attribute_set(*singleton->get_symbols(0)); //hard copy
         else
-            event_sets[pos] = new event_set(*p->get_symbols(pos_p++)); //hard copy
+            event_sets[pos] = new attribute_set(*p->get_symbols(pos_p++)); //hard copy
     }
     return new Pattern(new_length, event_sets, par->seq, singleton, p);
 }
@@ -990,15 +1052,15 @@ Pattern *mdl_enter::build_pattern(Pattern *a, Pattern *b, int offset) {
     else
         new_length = max(start_pos_b + b->get_length(), a->get_length());
 
-    auto **event_sets = new event_set *[new_length];
+    auto **event_sets = new attribute_set *[new_length];
     for (int pos = 0; pos < new_length; ++pos) {
         if (pos >= start_pos_a && pos >= start_pos_b && pos - start_pos_a < a->get_length() &&
             pos - start_pos_b < b->get_length())
             event_sets[pos] = join_eventsets(a->get_symbols(pos - start_pos_a), b->get_symbols(pos - start_pos_b));
         else if (pos >= start_pos_a && pos - start_pos_a < a->get_length())
-            event_sets[pos] = new event_set(*a->get_symbols(pos - start_pos_a)); //hard copy
+            event_sets[pos] = new attribute_set(*a->get_symbols(pos - start_pos_a)); //hard copy
         else if (pos >= start_pos_b && pos - start_pos_b < b->get_length())
-            event_sets[pos] = new event_set(*b->get_symbols(pos - start_pos_b)); //hard copy
+            event_sets[pos] = new attribute_set(*b->get_symbols(pos - start_pos_b)); //hard copy
     }
     newp = new Pattern(new_length, event_sets, par->seq, a, b);
     return newp;
@@ -1051,7 +1113,7 @@ usg_sz *mdl_enter::postprune(Pattern *accepted, int total_usg, double current_si
 }
 
 //checks whether esa is a subset of esb
-bool mdl_enter::check_subset(event_set *esa, event_set *esb) {
+bool mdl_enter::check_subset(attribute_set *esa, attribute_set *esb) {
     auto endb = esb->end();
     for (auto it : *esa)
         if (esb->find(it) == endb)
@@ -1100,7 +1162,9 @@ prunepattern_set::iterator mdl_enter::find_pattern_in_set(prunepattern_set *pset
 mdl_enter::~mdl_enter() {
     delete par->seq;
     delete ct;
-    delete cand;
+    if (cand != NULL) {
+        delete cand;
+    }
     delete ct_on_usg;
     delete cover;
     if (white_list)

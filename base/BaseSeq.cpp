@@ -2,7 +2,7 @@
 // Created by A on 2021/1/23.
 //
 
-#include "BaseSeq.hpp"
+#include "BaseSeq.h"
 
 using namespace std;
 

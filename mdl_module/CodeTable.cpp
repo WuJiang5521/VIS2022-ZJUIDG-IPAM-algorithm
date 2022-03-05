@@ -50,12 +50,6 @@ double CodeTable::compute_sz_d_ct(Sequence *sequence) {
                         it_ct->get_codelength_gap();            //TERM: L(C_g | CT)		-> gap codes
                 size += it_ct->get_usage_fill() *
                         it_ct->get_codelength_fill();        //TERM: L(C_g | CT)		-> no_gap codes
-#ifdef MISS
-                if (it_ct->get_usage_miss() > 0) {
-                    size += it_ct->get_usage_miss() *
-                            it_ct->get_codelength_miss();
-                }
-#endif
             }
         }
     }
@@ -89,18 +83,24 @@ double CodeTable::compute_sz_ct_c(Sequence *s) {
 
         if (p->get_usage() == 0)
             continue;
-
+        double sz_x_ct = 0;
         non_singl_usg += p->get_usage();
-        size -= 10 * mu->intcost(
+        sz_x_ct += mu->intcost(
                 p->get_length());                                            //TERM: L_N( |X| )							-> length of the pattern
 
         for (int ts = 0; ts < p->get_length(); ++ts)
-            size += logb2(
+            sz_x_ct += logb2(
                     nrAttr);                                                        //TERM: log( |A| )							-> height of the pattern at ts
 
-        size += mu->intcost(p->get_usage_gap() +
+        sz_x_ct += mu->intcost(p->get_usage_gap() +
                             1);                                        //TERM: L_N( gaps(X)+1 )					-> #gaps in X
-        size += p->get_st_size();                                                            //TERM: SUM_{x in X} L( code_p(x|ST) )		-> length of X in left column of CT
+        sz_x_ct += p->get_st_size();                                                            //TERM: SUM_{x in X} L( code_p(x|ST) )		-> length of X in left column of CT
+
+        if (p->get_length() < par->pattern_length_min || p->get_length() > par->pattern_length_max) {
+            sz_x_ct *= 2;
+        }
+
+        size += sz_x_ct;
     }
 
     size += mu->intcost(non_singletons +
@@ -149,6 +149,15 @@ bool CodeTable::insert_pattern(Pattern *p) {
         length_ct++;
 
     return ret.second;
+}
+
+bool CodeTable::find_pattern(Pattern *p) {
+    for (auto & p_c : *code_table) {
+        if (*p_c == *p) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void CodeTable::delete_pattern(Pattern *p) {

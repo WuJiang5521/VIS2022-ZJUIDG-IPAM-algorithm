@@ -11,11 +11,7 @@ public:
     Attribute(int s, int aid, int id, int tree_id) : symbol(s), attribute(aid), id(id), tree_id(tree_id) {}
 
     void print() const {
-#ifdef MISS
-        outfile_miss << "id: " << id << " sym: " << symbol << " aid: " << attribute << endl;
-#else
         cout << "id: " << id << " sym: " << symbol << " aid: " << attribute << endl;
-#endif
     }
 
     const int symbol;
@@ -46,7 +42,7 @@ struct EventPtrComp {
     }
 };
 
-typedef std::set<Attribute *, EventPtrComp> event_set;                    //set of events
+typedef std::set<Attribute *, EventPtrComp> attribute_set;                    //set of events
 
 
 

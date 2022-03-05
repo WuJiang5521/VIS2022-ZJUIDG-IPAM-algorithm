@@ -8,10 +8,38 @@
 #include "Cover.h"
 #include "Node.h"
 #include "GetOpt.h"
+#include "../base/BaseDS.h"
+#include "../base/BaseAttr.h"
+
+
+struct MDLParameters {
+    bool FP_windows = false;
+    bool fill_patterns = false;
+
+    char * input_filename;
+    char * dummy_filename;
+    char * output_dir;
+
+    int minsup = 10;
+    int pattern_window_index_min = 0;
+    int pattern_window_index_max = -1;
+    int pattern_length_min = 0;
+    int pattern_length_max = INF;
+
+    vector<int> attr_use;
+
+    char * pattern_in_sequences_file;
+    char * pattern_pos_in_sequences_file;
+    char * sequences_file;
+    char * winner_file;
+    char * pattern_file;
+    char * pattern_id_file;
+};
 
 class mdl_enter {
 public:
-    explicit mdl_enter(Parameters *parameters);
+    explicit mdl_enter(Parameters *parameters, nlohmann::json& insert_patterns);
+    explicit mdl_enter(Parameters *parameters, nlohmann::json& code_table, vector<int>& delete_patterns_id, nlohmann::json& insert_patterns);
 
     ~mdl_enter();
 
@@ -21,17 +49,17 @@ public:
 
     bool check_pattern_attribute_overlap(Pattern *a, Pattern *b, int offset);
 
-    bool check_eventset_attribute_overlap(event_set *a, event_set *b);
+    bool check_eventset_attribute_overlap(attribute_set *a, attribute_set *b);
 
     bool check_subset(Pattern *a, Pattern *b);
 
-    bool check_subset(event_set *esa, event_set *esb);
+    bool check_subset(attribute_set *esa, attribute_set *esb);
 
     bool check_if_dummy(Pattern *p);
 
     bool combine_patterns(Pattern *a, Pattern *b, int total_usage, pattern_set *result);
 
-    event_set *join_eventsets(event_set *a, event_set *b);
+    attribute_set *join_eventsets(attribute_set *a, attribute_set *b);
 
     void insert_candidates(pattern_set *list);
 
@@ -44,13 +72,9 @@ public:
     prunepattern_set::iterator find_pattern_in_set(prunepattern_set *pset, Pattern *p);
 
     void break_down(Pattern *p);
-#ifdef LSH
-    void generate_candidates(usg_sz *current_usgSz); // our generator for less generation
-#else
     void generate_candidates(usagepattern_set::iterator *pt_ct_1, usagepattern_set::iterator *pt_ct_2,
                              usagepattern_set::iterator *pt_begin_ct, usagepattern_set::iterator *pt_end_ct,
                              usg_sz *current_usgSz);
-#endif
     usg_sz *try_variations(Pattern *accepted, usg_sz *current_usgSz);
 
     void load_or_build_min_windows(Pattern *p);
@@ -58,8 +82,11 @@ public:
     CodeTable *get_codeTable() { return ct; }
 
     Cover *get_cover() { return cover; }
-    friend void convert_inter_data(mdl_enter * mdl, string filename);
 
+    void save_debug_files(usg_sz *current_usgSz, double init_sz);
+    void save_result_files();
+
+    void insert_patterns(nlohmann::json& insert_patterns);
 
 private:
     CodeTable *ct;
@@ -68,10 +95,6 @@ private:
     usagepattern_set *ct_on_usg;        //ordered on usage
 
     Cover *cover{};
-#ifdef LSH
-    priority_queue<pair<int, pair<Pattern*, Pattern*>>> *candidate_order; // candidate order that generated from Table
-    const double cand_threshold = 0.05; // the candidate whose table value is less than cand_threshold * nrSequence is abandoned
-#endif
 
     pattern_set *white_list;            //contains all considered candidates so we don't need to compute their support and min_windows again
     pattern_set *black_list;            //contains all considered candidates with sup = 0
@@ -83,6 +106,8 @@ private:
     Parameters *par;
 };
 
-int start_mdl(int argc, char **argv);
+void mdl_run(MDLParameters &arg, const string&);
+
+void mdl_modify_and_run(const string& old_model_pattern_filename, vector<int>& delete_patterns_id, const string& insert_patterns_filename, MDLParameters&);
 
 #endif

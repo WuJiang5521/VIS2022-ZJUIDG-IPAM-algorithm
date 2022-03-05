@@ -13,8 +13,9 @@ public:
     const int alphabetSize;        //possible number of symbols in this Event-event
     const int id;                    //time step in the data sequence
     const int seqid;                //id of the sequence it is in
+    const int seqindex;             //index in the sequence
 
-    Event(int alphabetSize, int id, int seqid);
+    Event(int alphabetSize, int id, int seqid, int seqindex);
 
     ~Event();
 
@@ -24,7 +25,7 @@ public:
 
     int get_size() const { return size; }
 
-    event_set *get_events() const { return events; }
+    attribute_set *get_events() const { return events; }
 
     void add_event(Attribute *e) {
         events->insert(e);
@@ -43,7 +44,7 @@ public:
 
     Pattern **is_covered;    //for each symbol by which pattern it is covered
     bool is_overlap;
-    event_set *events;        //set of event pointers for this Event
+    attribute_set *events;        //set of event pointers for this Event
 
 private:
     Event *nxt;        //a pointer to the next Event in the data

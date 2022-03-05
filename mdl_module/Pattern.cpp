@@ -2,6 +2,8 @@
 #include "Pattern.h"
 #include "Sequence.h"
 
+int Pattern::id_top = 0;
+
 double log2(double d) {
     if (d == 0)
         return 0;
@@ -12,18 +14,27 @@ double log2(double d) {
 /*
 Parameters:
 	int length:				# of time steps the pattern is long
-	event_set **event_sets:	for each time step a pointer to set of events
+	attribute_set **event_sets:	for each time step a pointer to set of events
 */
-Pattern::Pattern(int length, event_set **event_sets, Sequence *s) : length(length), event_sets(event_sets),
-                                                                    g_seq(s) {
+Pattern::Pattern(int length, attribute_set **event_sets, Sequence *s) : length(length), event_sets(event_sets),
+                                                                        g_seq(s) {
+    g_x = nullptr;
+    g_y = nullptr;
+    id = id_top++;
+    init();
+    set_min_windows(s);
+}
+Pattern::Pattern(int length, attribute_set **event_sets, Sequence *s, int id) : length(length), event_sets(event_sets),
+                                                                        g_seq(s), id(id) {
     g_x = nullptr;
     g_y = nullptr;
     init();
     set_min_windows(s);
 }
 
-Pattern::Pattern(int length, event_set **event_sets, Sequence *s, Pattern *x, Pattern *y)
+Pattern::Pattern(int length, attribute_set **event_sets, Sequence *s, Pattern *x, Pattern *y)
         : length(length), event_sets(event_sets), g_seq(s) {
+    id = id_top++;
     if (x != nullptr && y != nullptr) {
         //Order x and y such that x is always the one ordered lower
         if (*x > *y) {
@@ -50,24 +61,16 @@ void Pattern::init() {
     r_codelength = DBL_MAX;
     r_codelength_gap = DBL_MAX;
     r_codelength_fill = DBL_MAX;
-#ifdef MISS
-    codelength_miss = DBL_MAX;
-    r_codelength_miss = DBL_MAX;
-#endif
+
     estimatedGain = 0;
 
     usage = 0;
     usage_gap = 0;
     usage_fill = 0;
-#ifdef MISS
-    usage_miss = 0;
-#endif
+
     r_usage = 0;
     r_usage_gap = 0;
     r_usage_fill = 0;
-#ifdef MISS
-    r_usage_miss = 0;
-#endif
 
     usage_decreased = false;
 
@@ -204,25 +207,15 @@ double Pattern::compute_estimated_gain(int usg_x, int usg_y, int usg_z, int usg_
 
 
 //NOTE: usage must be set before this method, i.e. cover must be run
-#ifdef MISS
-void Pattern::update_codelength(double sum, double miss_sum, MathUtil* mu, int nr_of_attributes)
-#else
+
 void Pattern::update_codelength(double sum)    //sum includes laplace for every pattern
-#endif
 {
     codelength = -log2((usage + laplace) / sum);
 
-#ifdef MISS
-    codelength_gap = -log2((usage_gap + laplace) / (usage_fill + usage_gap + usage_miss + 2 * laplace));
-
-    codelength_fill = -log2((usage_fill + laplace) / (usage_fill + usage_gap + usage_miss + 2 * laplace));
-    codelength_miss = -log2((usage_miss + laplace) / (usage_fill + usage_gap + usage_miss)) + mu->intcost(nr_of_attributes);
-#else
 
     codelength_gap = -log2((usage_gap + laplace) / (usage_fill + usage_gap + 2 * laplace));
 
     codelength_fill = -log2((usage_fill + laplace) / (usage_fill + usage_gap + 2 * laplace));
-#endif
 
     //Check if the total usage has decreased
     if (r_usage > usage)
@@ -243,6 +236,7 @@ list<Window *> *Pattern::build_min_windows(Sequence *s) //NOTE: 's' might be dif
     auto *result = new list<Window *>();
     const auto **occ_per_timestep = new const list<Event *> *[length];
     int *sup_per_timestep = new int[length];
+    Parameters *par = s->get_parameters();
     for (int l = 0; l < length; ++l) {
         occ_per_timestep[l] = s->find_occurrences(event_sets[l]);
         sup_per_timestep[l] = occ_per_timestep[l]->size();
@@ -250,62 +244,87 @@ list<Window *> *Pattern::build_min_windows(Sequence *s) //NOTE: 's' might be dif
             return result;    //There can be no minimal windows for this pattern
     }
 
-    if (length > 1) {
-        const Event **mev_positions;
-        const Event *front, *back;
-        auto it_last = occ_per_timestep[length - 1]->rbegin(),
-                end_last = occ_per_timestep[length - 1]->rend();
-        while (it_last != end_last) //loop over all occurences of the last Event in the pattern
-        {
-            mev_positions = new const Event *[length];
-            front = nullptr;
-            back = *it_last;
-            int id = back->id;
-
-            bool stop = false;
-            //find a window that ends at back->id
-            mev_positions[length - 1] = back;
-            for (int pos = length - 2; pos >= 0; --pos)    //skip the last
-            {
-                auto it = occ_per_timestep[pos]->rbegin(), end = occ_per_timestep[pos]->rend();    //reverse iterator
-                while ((*it)->id >= id) {
-                    ++it;
-                    if (it == end) {
-                        stop = true;
-                        break;
-                    }
+    if (length == 1) {
+        for (auto it : *occ_per_timestep[0]) {
+            if (size > 1) {
+                int window_index_min = par->pattern_window_index_min >= 0 ?
+                                       par->pattern_window_index_min :
+                                       s->get_sequence_sizes()[it->seqid] + par->pattern_window_index_min;
+                int window_index_max = par->pattern_window_index_max >= 0 ?
+                                       par->pattern_window_index_max :
+                                       s->get_sequence_sizes()[it->seqid] + par->pattern_window_index_max;
+                if (window_index_min > it->seqindex || window_index_max < it->seqindex) {
+                    continue;
                 }
+            }
+            ++support;
+            const auto **mev_positions = new const Event *[1];
+            mev_positions[0] = it;
+            auto *w = new Window(mev_positions, this);
+            if (!result->empty())
+                result->back()->next = w;
+            result->push_back(w);
+        }
+        return result;
+    }
 
-                if (!stop && (back->id - (*it)->id) + 1 >
-                             length)  // max gapsize is patternlength-1 -> total length = 2*patternlength-1
+    const Event **mev_positions;
+    const Event *front, *back;
+    auto it_last = occ_per_timestep[length - 1]->rbegin(),
+            end_last = occ_per_timestep[length - 1]->rend();
+    while (it_last != end_last) {  //loop over all occurences of the last Event in the pattern
+        mev_positions = new const Event *[length];
+        front = nullptr;
+        back = *it_last;
+        int id = back->id;
+
+        bool stop = false;
+        //find a window that ends at back->id
+        mev_positions[length - 1] = back;
+        for (int pos = length - 2; pos >= 0; --pos) {   //skip the last
+            auto it = occ_per_timestep[pos]->rbegin(), end = occ_per_timestep[pos]->rend();    //reverse iterator
+            while ((*it)->id >= id) {
+                ++it;
+                if (it == end) {
                     stop = true;
-
-                if (stop)
                     break;
-
-                id = (*it)->id;
-                mev_positions[pos] = *it;
-                if (pos == 0)
-                    front = *it;
-            }
-
-            //make a minimal window out of the found window
-            if (!stop && front != nullptr)    //if a window was found
-            {
-                int cur_id = front->id;
-                for (int pos = 1; pos < length; ++pos)    //first Event is already in right place
-                {
-                    auto it = occ_per_timestep[pos]->begin(), end = occ_per_timestep[pos]->end();    //iterator
-                    while ((*it)->id <= cur_id) ++it;
-                    mev_positions[pos] = *it;
-                    cur_id = (*it)->id;
                 }
             }
 
-            if (!stop && front != nullptr && front->seqid == back->seqid) {
+            if (!stop && (back->id - (*it)->id) + 1 >
+                         length)  // max gapsize is patternlength-1 -> total length = 2*patternlength-1
+                stop = true;
+
+            if (stop)
+                break;
+
+            id = (*it)->id;
+            mev_positions[pos] = *it;
+            if (pos == 0)
+                front = *it;
+        }
+
+        //make a minimal window out of the found window
+        if (!stop && front != nullptr) {   //if a window was found
+            int cur_id = front->id;
+            for (int pos = 1; pos < length; ++pos) {   //first Event is already in right place
+                auto it = occ_per_timestep[pos]->begin(), end = occ_per_timestep[pos]->end();    //iterator
+                while ((*it)->id <= cur_id) ++it;
+                mev_positions[pos] = *it;
+                cur_id = (*it)->id;
+            }
+        }
+
+        if (!stop && front != nullptr && front->seqid == back->seqid) {
+            int window_index_min = par->pattern_window_index_min >= 0 ?
+                                   par->pattern_window_index_min :
+                                   s->get_sequence_sizes()[mev_positions[0]->seqid] + par->pattern_window_index_min;
+            int window_index_max = par->pattern_window_index_max >= 0 ?
+                                   par->pattern_window_index_max :
+                                   s->get_sequence_sizes()[mev_positions[length - 1]->seqid] + par->pattern_window_index_max;
+            if (window_index_min <= mev_positions[0]->seqindex && window_index_max >= mev_positions[length - 1]->seqindex) {
                 auto *w = new Window(mev_positions, this);
                 bool present = false;
-
                 if (!result->empty()) {
                     if (w->equal(result->back()))
                         present = true;
@@ -316,54 +335,44 @@ list<Window *> *Pattern::build_min_windows(Sequence *s) //NOTE: 's' might be dif
                     delete w;
                 else
                     result->push_back(w);            //the windows are added with the last starting window first
-            } else
-                delete[]mev_positions;
-
-            ++it_last;
-        }
-
-        //set prev/next_disjoint windows, NOTE: min_windows are ordered with the first starting window at the end of the list
-        if (result->size() > 1) {
-            Window *w, *nxt = result->back()->next;
-            auto it = result->rbegin(), end = result->rend();
-            while (it != end) {
-                w = *it;
-
-                //for w its next disjoint windows can not be before nxt, thus we can continue with the nxt variable as long as it comes after w
-                if (nxt->first->id <= w->first->id)
-                    nxt = w->next;
-
-                //check if there are events that overlap
-                while (overlap(w, nxt))
-                    nxt = nxt->next;
-
-                if (nxt == nullptr) //all further windows will also have no next_disjoint
-                    break;
-
-                w->next_disjoint = nxt;
-                nxt->prev_disjoint = w;
-                ++it;
             }
-        }
+        } else
+            delete[]mev_positions;
 
-        //set support (max nr of disjoint minimal windows): we greedily add the minimal window that starts/ends first (because all windows are minimal it is also the window that ends first)
-        if (!result->empty()) {
-            //NOTE: min_windows are ordered with the first starting window at the back of the list
-            Window *greedy = result->back();
-            while (greedy != nullptr) {
-                ++support;
-                greedy = greedy->next_disjoint;
-            }
+        ++it_last;
+    }
+
+    //set prev/next_disjoint windows, NOTE: min_windows are ordered with the first starting window at the end of the list
+    if (result->size() > 1) {
+        Window *w, *nxt = result->back()->next;
+        auto it = result->rbegin(), end = result->rend();
+        while (it != end) {
+            w = *it;
+
+            //for w its next disjoint windows can not be before nxt, thus we can continue with the nxt variable as long as it comes after w
+            if (nxt->first->id <= w->first->id)
+                nxt = w->next;
+
+            //check if there are events that overlap
+            while (overlap(w, nxt))
+                nxt = nxt->next;
+
+            if (nxt == nullptr) //all further windows will also have no next_disjoint
+                break;
+
+            w->next_disjoint = nxt;
+            nxt->prev_disjoint = w;
+            ++it;
         }
-    } else {   //length == 1, thus every occurence is a minWindow
-        for (auto it : *occ_per_timestep[0]) {
+    }
+
+    //set support (max nr of disjoint minimal windows): we greedily add the minimal window that starts/ends first (because all windows are minimal it is also the window that ends first)
+    if (!result->empty()) {
+        //NOTE: min_windows are ordered with the first starting window at the back of the list
+        Window *greedy = result->back();
+        while (greedy != nullptr) {
             ++support;
-            const auto **mev_positions = new const Event *[1];
-            mev_positions[0] = it;
-            auto *w = new Window(mev_positions, this);
-            if (!result->empty())
-                result->back()->next = w;
-            result->push_back(w);
+            greedy = greedy->next_disjoint;
         }
     }
 
@@ -372,7 +381,7 @@ list<Window *> *Pattern::build_min_windows(Sequence *s) //NOTE: 's' might be dif
 
 
 //Return true when the two event sets overlap on an event
-bool Pattern::overlap(event_set *events_a, event_set *events_b) const {
+bool Pattern::overlap(attribute_set *events_a, attribute_set *events_b) const {
     auto endB = events_b->end();
     for (auto it : *events_a)
         if (events_b->find(it) != endB)
@@ -406,23 +415,17 @@ void Pattern::reset_usage() {
     usage = 0;
     usage_gap = 0;
     usage_fill = 0;
-#ifdef MISS
-    r_usage_miss = usage_miss;
-    usage_miss = 0;
-#endif
 
     r_codelength = codelength;
     r_codelength_gap = codelength_gap;
     r_codelength_fill = codelength_fill;
     //leave the codelength itself untouched!
-#ifdef MISS
-    r_codelength_miss = codelength_miss;
-#endif
 
     //set al windows to active = false
-
-    for (auto &minWindow : *min_windows)
+    for (auto &minWindow : *min_windows) {
         minWindow->active = false;
+    }
+
 }
 
 void Pattern::rollback() {
@@ -432,10 +435,6 @@ void Pattern::rollback() {
     codelength = r_codelength;
     codelength_gap = r_codelength_gap;
     codelength_fill = r_codelength_fill;
-#ifdef MISS
-    usage_miss = r_usage_miss;
-    codelength_miss = r_codelength_miss;
-#endif
 }
 
 Pattern::~Pattern() {
