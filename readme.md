@@ -11,4 +11,8 @@
 
 #### Usage
 
+```shell
+python setup.py install
+```
+
 ----
