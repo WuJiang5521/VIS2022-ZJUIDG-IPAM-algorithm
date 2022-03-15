@@ -490,7 +490,7 @@ void mdl_enter::save_result_files() {
     ofstream pattern_stream;
     pattern_stream.open(pattern_file, ios::out);
 
-    json patterns;
+    json patterns = vector<int>(0);
     json patterns_in_sequences;
     json code_table;
 

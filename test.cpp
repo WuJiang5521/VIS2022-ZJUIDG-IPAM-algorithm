@@ -6,15 +6,14 @@
 using namespace std;
 
 int main() {
-    char *input_dir = "../data/tt",
+    char *input_dir = "../data/tennis",
             *output_filename = "../iiii.dat",
             *processed_sequences_filename = "../out_sequences.json",
-            *target_player = "孙颖莎";
-    vector<string> files = {"20180324 德国公开赛 女单第二轮 孙颖莎vs伊藤美诚-data.json",
-                            "20190424 布达佩斯世乒赛 女单十六分之一决赛 孙颖莎vs伊藤美诚-data.json"};
+            *target_player = "Djokovic";
+    vector<string> files = {"2018法网男单四分之一决赛-切齐纳托vs德约科维奇.json"};
     vector<string> attribute_names = {"BallPosition",
-                                      "StrikePosition",
-                                      "StrikeTech"};
+                                      "HittingPose",
+                                      "HitTechnique"};
     auto file_type = FileType::TableTennis;
     nlohmann::json sequences;
     BaseDS::sequenceList = {};

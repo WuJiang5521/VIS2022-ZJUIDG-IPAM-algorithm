@@ -160,20 +160,18 @@ list<BaseSeq> extract_tennis_sequences(json j, const string & target_player, con
             for (auto strike: rally["patterns"]) {
                 auto attrs = vector<int>();
                 if (strike["HitPlayer"] == our_player) {
-                    attrs.push_back(BaseAttr::from_key_value("BallPosition", strike["BallPosition"]));
-                    attrs.push_back(BaseAttr::from_key_value("StrikePosition", strike["StrikePosition"]));
-                    attrs.push_back(BaseAttr::from_key_value("StrikeTech", strike["StrikeTech"]));
+                    for (const auto & attribute_name : attribute_names) {
+                        attrs.push_back(BaseAttr::from_key_value(attribute_name, strike[attribute_name]));
+                    }
                 } else {
                     auto remove_quote = [](string s) {
                         s.erase(remove_if(s.begin(), s.end(), [](unsigned char x) {return x == '"';}), s.end());
                         return s;
                     };
-                    string BallPosition = remove_quote(to_string(strike["BallPosition"]));
-                    string StrikePosition = remove_quote(to_string(strike["StrikePosition"]));
-                    string StrikeTech = remove_quote(to_string(strike["StrikeTech"]));
-                    attrs.push_back(BaseAttr::from_key_value("BallPosition", BallPosition + "Op"));
-                    attrs.push_back(BaseAttr::from_key_value("StrikePosition", StrikePosition + "Op"));
-                    attrs.push_back(BaseAttr::from_key_value("StrikeTech", StrikeTech + "Op"));
+                    for (const auto & attribute_name : attribute_names) {
+                        string attribute_name_op = remove_quote(to_string(strike[attribute_name])) + "Op";
+                        attrs.push_back(BaseAttr::from_key_value(attribute_name, attribute_name_op));
+                    }
                 }
 
                 events.emplace_back(attrs);
@@ -207,7 +205,7 @@ list<BaseSeq> FileLoader::loadFile(const string& fileName,
             case FileType::Badminton:
                 return extract_badminton_sequences(j, target_player, attribute_names, sequences);
             case FileType::Tennis:
-                return extract_tennis_sequences(j, target_player, attribute_names, sequences);
+                return extract_tt_sequences(j, target_player, attribute_names, sequences);
             default:
                 throw invalid_argument("The file type is not supported!");
         }
