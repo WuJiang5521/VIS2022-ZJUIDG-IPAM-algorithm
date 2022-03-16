@@ -87,10 +87,11 @@ void mdl_run(MDLParameters &arg, const string& insert_patterns_filename) {
             parameters.fill_pattern[attr] = true;
     }
 
-    std::ifstream insert_patterns_stream(insert_patterns_filename, std::ifstream::binary);
-    string insert_patterns_str;
-    insert_patterns_stream >> insert_patterns_str;
-    json insert_patterns = json::parse(insert_patterns_str);
+    std::ifstream insert_patterns_stream(insert_patterns_filename, ios::in);
+//    string insert_patterns_str;
+    json insert_patterns;
+    insert_patterns_stream >> insert_patterns;
+//    json insert_patterns = json::parse(insert_patterns_str);
     puts("parse insert pattern json");
 
     clock_t t0 = clock();
@@ -363,15 +364,16 @@ void mdl_modify_and_run(const string& old_model_pattern_filename, vector<int>& d
         for (int attr = 0; attr < parameters.nr_of_attributes; ++attr)
             parameters.fill_pattern[attr] = true;
     }
-    std::ifstream old_model_pattern_stream(old_model_pattern_filename, std::ifstream::binary);
-    string old_model_pattern_str;
-    old_model_pattern_stream >> old_model_pattern_str;
-    json old_model_patterns = json::parse(old_model_pattern_str);
+    std::ifstream old_model_pattern_stream(old_model_pattern_filename, ios::in);
+//    string old_model_pattern_str;
+    json old_model_patterns;
+    old_model_pattern_stream >> old_model_patterns;
+//    json old_model_patterns = json::parse(old_model_pattern_str);
 
-    std::ifstream insert_patterns_stream(insert_patterns_filename, std::ifstream::binary);
-    string insert_patterns_str;
-    insert_patterns_stream >> insert_patterns_str;
-    json insert_patterns = json::parse(insert_patterns_str);
+    std::ifstream insert_patterns_stream(insert_patterns_filename, ios::in);
+//    string insert_patterns_str;
+    json insert_patterns;
+    insert_patterns_stream >> insert_patterns;
     puts("parse json");
 
 
