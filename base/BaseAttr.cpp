@@ -23,7 +23,7 @@ int BaseAttr::from_key_value(const string &key, const string &value) {
     }
 
     string new_value = value;
-    new_value.erase(remove_if(new_value.begin(), new_value.end(), [](unsigned char x) {return isspace(x);}), new_value.end());
+//    new_value.erase(remove_if(new_value.begin(), new_value.end(), [](unsigned char x) {return isspace(x);}), new_value.end());
 
     auto &v = record[key];
     auto &m = mapping[key];

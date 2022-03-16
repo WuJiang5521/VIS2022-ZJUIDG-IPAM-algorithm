@@ -139,8 +139,6 @@ static PyMethodDef MDLMethods[] = {
         {NULL, NULL, 0, NULL}
 };
 
-
-
 static struct PyModuleDef mdlmodule = {
         PyModuleDef_HEAD_INIT,
         "mdl_ipam",
