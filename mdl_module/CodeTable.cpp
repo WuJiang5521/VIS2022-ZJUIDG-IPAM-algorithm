@@ -42,7 +42,12 @@ double CodeTable::compute_sz_d_ct(Sequence *sequence) {
             continue;
 
         if (it_ct->get_usage() > 0) {
-            size += it_ct->get_usage() * it_ct->get_codelength();                    //TERM: L(C_p | CT)
+
+            if (it_ct->get_length() < par->pattern_length_min || it_ct->get_length() > par->pattern_length_max) {
+                size += it_ct->get_usage() * it_ct->get_codelength() * 50;
+            } else {
+                size += it_ct->get_usage() * it_ct->get_codelength();                    //TERM: L(C_p | CT)
+            }
 
             if (it_ct->get_length() > 1)    // |X| > 1 -> possible gaps
             {
@@ -95,10 +100,6 @@ double CodeTable::compute_sz_ct_c(Sequence *s) {
         sz_x_ct += mu->intcost(p->get_usage_gap() +
                             1);                                        //TERM: L_N( gaps(X)+1 )					-> #gaps in X
         sz_x_ct += p->get_st_size();                                                            //TERM: SUM_{x in X} L( code_p(x|ST) )		-> length of X in left column of CT
-
-        if (p->get_length() < par->pattern_length_min || p->get_length() > par->pattern_length_max) {
-            sz_x_ct *= 2;
-        }
 
         size += sz_x_ct;
     }

@@ -6,13 +6,24 @@
 using namespace std;
 
 int main() {
-    char *input_dir = "../data/tennis",
+    char *input_dir = "../data/badminton",
             *output_filename = "../iiii.dat",
             *processed_sequences_filename = "../out_sequences.json",
-            *target_player = "Djokovic";
-    vector<string> files = {"2018法网男单四分之一决赛-切齐纳托vs德约科维奇.json"};
+            *target_player = "Momota Kento";
+    vector<string> files = {"30128.json",
+                            "30129.json",
+                            "30136.json",
+                            "30137.json",
+                            "30138.json",
+                            "30148.json",
+                            "30149.json",
+                            "30150.json",
+                            "30151.json",
+                            "30152.json",
+                            "30162.json",
+                            "30163.json"};
     vector<string> attribute_names = {"BallPosition",
-                                      "HittingPose",
+                                      "BallHeight",
                                       "HitTechnique"};
     auto file_type = FileType::TableTennis;
     nlohmann::json sequences;
@@ -38,7 +49,7 @@ int main() {
     arg.pattern_length_min = 0;
     arg.pattern_length_max = 1000;
     arg.pattern_file = "out_patterns.json";
-    string old_pattern_filename = "../out_patterns.json";
+    string old_pattern_filename = "../pattern.json";
     string insert_patterns_filename = "../insert_tactics.json";
     string attr_use_str = "1 1 1";
     string delete_patterns_id_str = "";

@@ -203,7 +203,7 @@ list<BaseSeq> FileLoader::loadFile(const string& fileName,
             case FileType::TableTennis:
                 return extract_tt_sequences(j, target_player, attribute_names, sequences);
             case FileType::Badminton:
-                return extract_badminton_sequences(j, target_player, attribute_names, sequences);
+                return extract_tt_sequences(j, target_player, attribute_names, sequences);
             case FileType::Tennis:
                 return extract_tt_sequences(j, target_player, attribute_names, sequences);
             default:
