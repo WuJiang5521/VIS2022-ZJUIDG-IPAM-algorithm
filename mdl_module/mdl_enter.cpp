@@ -4,7 +4,7 @@
 using namespace std;
 using json = nlohmann::json;
 
-void mdl_run(MDLParameters &arg, const string& insert_patterns_filename) {
+void mdl_run(MDLParameters &arg, const string& insert_patterns_filename, bool test_flag) {
     Parameters parameters;
     parameters.release = true;
 
@@ -97,6 +97,15 @@ void mdl_run(MDLParameters &arg, const string& insert_patterns_filename) {
     clock_t t0 = clock();
     auto *mdl = new mdl_enter(&parameters, insert_patterns);
     cout << "mdl_module time: " << (clock() - t0)*1.0/CLOCKS_PER_SEC << "s" << endl;
+    if (!test_flag) {
+        mdl->save_result_files();
+    }
+    if (test_flag) {
+        ofstream time_stream;
+        time_stream.open("test_time.txt", ios::out);
+        time_stream << (clock() - t0) * 1.0 / CLOCKS_PER_SEC;
+        time_stream.close();
+    }
     delete mdl;
 }
 
@@ -215,7 +224,7 @@ mdl_enter::mdl_enter(Parameters *par, json& insert_patterns) : par(par) {
 
     cover = new Cover(par->seq, ct, false);
     save_debug_files(current_usgSz, init_sz);
-    save_result_files();
+//    save_result_files();
 }
 
 
@@ -377,7 +386,9 @@ void mdl_modify_and_run(const string& old_model_pattern_filename, vector<int>& d
     puts("parse json");
 
 
+    clock_t t0 = clock();
     auto* new_mdl_model = new mdl_enter(&parameters, old_model_patterns["code_table"], delete_patterns_id, insert_patterns);
+    cout << "mdl_module time: " << (clock() - t0)*1.0/CLOCKS_PER_SEC << "s" << endl;
     delete new_mdl_model;
 }
 

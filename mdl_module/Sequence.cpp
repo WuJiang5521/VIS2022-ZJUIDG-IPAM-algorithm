@@ -367,7 +367,7 @@ void Sequence::cover_singletons(Pattern ***singletons) {
             if (!mev_time[i]->test_covered((*it)->id)) {   //if not yet covered
                 //fill the is_covered array in Event
                 mev_time[i]->cover((*it), singletons[(*it)->attribute][(*it)->symbol], false);
-                singletons[(*it)->attribute][(*it)->symbol]->update_usages(0);
+                singletons[(*it)->attribute][(*it)->symbol]->update_usages(0, par->attr_use[(*it)->attribute]);
             }
         }
     }

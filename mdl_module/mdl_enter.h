@@ -106,7 +106,7 @@ private:
     Parameters *par;
 };
 
-void mdl_run(MDLParameters &arg, const string&);
+void mdl_run(MDLParameters &arg, const string&, bool test_flag = false);
 
 void mdl_modify_and_run(const string& old_model_pattern_filename, vector<int>& delete_patterns_id, const string& insert_patterns_filename, MDLParameters&);
 

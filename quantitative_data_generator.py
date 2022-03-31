@@ -3,6 +3,7 @@ import os
 import random
 import sys
 import time
+import pdb
 from datetime import datetime
 from random import randrange
 
@@ -96,8 +97,8 @@ def generateRandomPatterns(nrOfPatterns, minSup, maxSup, minGapChance, maxGapCha
         size = randrange(minSize, maxSize + 1, 1)
         length = randrange(math.ceil(float(size) / nrAttr), size + 1, 1)
         support = randrange(int(minSup * 10), int(maxSup * 10) + 1, 1)  # as percentage of total #events
-        support = int(nrMev * nrAttr * (support / 10000.0))
-        support = int(support / size)
+        support = int(nrMev * (support / 10000.0)) # int(nrMev * nrAttr * (support / 10000.0))
+        support = int(support / length) # int(support / size)
         patterns.append(Pattern(support, gapChance, size, length))
 
         if unique and len(uniqueSet) + size > nrAttr * alphaPerAttr:
@@ -180,7 +181,7 @@ def insertPattern(data, nrMev, pattern, overwrite, interleave, occupied):
                         break
         if no_room:
             cnt_not_inserted = cnt_not_inserted + (pattern.support - occ)
-            print(f'#ACTUAL support: {pattern.support - cnt_not_inserted} in stead of {pattern.support}')
+            print(f'#ACTUAL support: {pattern.support - cnt_not_inserted} instead of {pattern.support}')
             break
         loc = loc + '['
         for ts in range(0, pattern.length):  # Second: insert the pattern
@@ -203,7 +204,7 @@ For each attribute i its values range from 0 to max_i
 """
 
 
-def generateData(nrAttr, alphaPerAttr, patterns, overwrite, interleave, nrSequence, nrOfSequence):
+def generateData(nrAttr, alphaPerAttr, patterns, overwrite, interleave, nrSequence, nrOfSequence, d_filename):
     minsup = sys.maxsize
 
     sigma = 4
@@ -256,7 +257,7 @@ def generateData(nrAttr, alphaPerAttr, patterns, overwrite, interleave, nrSequen
 
                 # print DATA to file
     # d_file = 'data_' + tijd + '_'
-    d_file = 'quantitative_base.dat'
+    d_file = d_filename
     cnt = 1
     while os.path.isfile(d_file + str(cnt) + '.dat'):  # to avoid overwriting
         cnt = cnt + 1
@@ -305,21 +306,23 @@ def main(argv):
     maxGapChance = 0.05
     minSize = 5
     maxSize = 5
-    nrAttr = 3 # 
-    alphPerAttr = 100 #
+    nrAttr = 10 # 
+    alphPerAttr = 10 #
     overwrite = False
 
-    nrSequence = 50 # 
-    nrOfSequence = 20 # 
-    nrMev = 10 * nrSequence * nrOfSequence
+    nrSequence = 700 # 
+    nrOfSequence = 10 # 
+
+    d_filename = 'quantitative_base.dat'
 
     try:
         opts, args = getopt.getopt(argv, 'l:u:r:i:p:a:m:z:o:h',
-                                   ['minsup=', 'minPATsup=', 'maxPATsup=', 'minsz=', 'maxsz=', 'mingap=', 'maxgap='])
+                                   ['minsup=', 'minPATsup=', 'maxPATsup=', 'minsz=', 'maxsz=', 'mingap=', 'maxgap=', 'nrSequence=', 'nrOfSequence=', 'target='])
     except getopt.GetoptError as err:
         print(err)
         usage()
         sys.exit(2)
+    
 
     for opt, arg in opts:
         if opt == '-h':
@@ -328,6 +331,8 @@ def main(argv):
         elif opt == '-l':
             interleave = bool(arg)
         elif opt == '-p':
+            minPatSup = minPatSup * nrOfPatterns / int(arg)  # per pattern a percentage of the total nr of events -> in tenths of a percentage, i.e. 10=1%
+            maxPatSup = maxPatSup * nrOfPatterns / int(arg)
             nrOfPatterns = int(arg)
         elif opt == '-u':
             unique = bool(arg)
@@ -339,6 +344,8 @@ def main(argv):
             alphPerAttr = int(arg)
         elif opt == '-o':
             overwrite = bool(arg)
+        elif opt == '--target':
+            d_filename = arg
         elif opt == '--minsup':
             minsup = int(arg)
         elif opt == '--minPATsup':
@@ -353,6 +360,12 @@ def main(argv):
             minSize = int(arg)
         elif opt == '--maxsz':
             maxSize = int(arg)
+        elif opt == '--nrSequence':
+            nrSequence = int(arg)
+        elif opt == '--nrOfSequence':
+            nrOfSequence = int(arg)
+
+    nrMev = 10 * nrSequence * nrOfSequence
 
     if nrMev < 1 or \
             nrAttr < 1 or \
@@ -374,7 +387,7 @@ def main(argv):
             sys.exit(1)
 
     # generate the data
-    result = generateData(nrAttr, alphPerAttr, patterns, overwrite, interleave, nrSequence, nrOfSequence)
+    result = generateData(nrAttr, alphPerAttr, patterns, overwrite, interleave, nrSequence, nrOfSequence, d_filename)
     d_file = result[0]
     p_file = result[1]
     if minsup is None:
